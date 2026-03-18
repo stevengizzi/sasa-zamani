@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0e0c09}
+canvas{position:absolute;top:0;left:0;display:block}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#clickables{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.grain{
+  position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.04;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:160px 160px
+}
+.view-toggle{
+  position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:0;pointer-events:all;
+  border:0.5px solid rgba(196,154,58,0.25);z-index:10;
+}
+.view-btn{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:9px;
+  letter-spacing:0.14em;padding:7px 18px;cursor:pointer;
+  background:transparent;border:none;color:rgba(228,232,228,0.3);
+  transition:color 0.3s,background 0.3s;
+}
+.view-btn.active{color:rgba(196,154,58,0.9);background:rgba(196,154,58,0.06)}
+.view-btn:hover:not(.active){color:rgba(228,232,228,0.6)}
+.sep{width:0.5px;height:28px;background:rgba(196,154,58,0.25)}
+.event-label{
+  position:absolute;
+  font-family:'DM Mono',monospace;font-weight:300;font-size:7.5px;
+  letter-spacing:0.06em;color:rgba(228,232,228,0);
+  white-space:nowrap;pointer-events:none;transition:color 0.2s;
+  transform:translate(5px,-4px);
+}
+.cluster-name{
+  position:absolute;
+  font-family:'Cormorant Garamond',serif;font-weight:400;font-style:italic;
+  font-size:15px;letter-spacing:0.04em;
+  color:rgba(196,154,58,0);pointer-events:all;cursor:pointer;
+  transform:translate(-50%,-100%);transition:color 0.3s;white-space:nowrap;
+}
+.cluster-name:hover{text-decoration:underline;text-underline-offset:3px;}
+.strata-archetype{
+  position:absolute;
+  font-family:'Cormorant Garamond',serif;font-weight:400;font-style:italic;
+  font-size:13px;letter-spacing:0.04em;
+  color:rgba(196,154,58,0);pointer-events:all;cursor:pointer;
+  transform:translate(-50%,-50%);white-space:nowrap;transition:color 0.3s;
+}
+.strata-archetype:hover{text-decoration:underline;text-underline-offset:3px;}
+.title-tag{
+  position:absolute;top:16px;left:20px;
+  font-family:'DM Mono',monospace;font-weight:300;font-size:9px;
+  letter-spacing:0.16em;color:rgba(138,176,190,0.45);pointer-events:none;
+}
+.axis-label-left,.axis-label-right{
+  position:absolute;
+  font-family:'DM Mono',monospace;font-weight:300;font-size:9px;
+  letter-spacing:0.12em;color:rgba(138,176,190,0.55);
+  pointer-events:none;white-space:nowrap;
+}
+
+/* ── SIDE PANEL ─────────────────────────────────────────────────────── */
+#side-panel{
+  position:fixed;top:0;right:0;width:380px;height:100%;
+  background:rgba(14,12,9,0.97);
+  border-left:0.5px solid rgba(138,176,190,0.12);
+  transform:translateX(100%);
+  transition:transform 0.45s cubic-bezier(0.16,1,0.3,1);
+  z-index:100;overflow-y:auto;overflow-x:hidden;pointer-events:all;
+  display:flex;flex-direction:column;
+}
+#side-panel.open{transform:translateX(0)}
+#panel-close{
+  position:absolute;top:18px;right:20px;
+  font-family:'DM Mono',monospace;font-weight:300;font-size:8px;
+  letter-spacing:0.16em;color:rgba(138,176,190,0.35);
+  cursor:pointer;pointer-events:all;background:none;border:none;
+  transition:color 0.2s;
+}
+#panel-close:hover{color:rgba(138,176,190,0.8)}
+#panel-content{padding:48px 32px 64px 32px;flex:1;}
+
+/* archetype panel */
+.ap-glyph{display:flex;justify-content:center;margin-bottom:28px;}
+.ap-name{
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
+  font-size:28px;letter-spacing:0.03em;color:rgba(228,232,228,0.9);
+  text-align:center;margin-bottom:6px;
+}
+.ap-myth{
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
+  font-size:13px;line-height:1.7;color:rgba(228,232,228,0.88);
+  text-align:center;margin-bottom:28px;letter-spacing:0.02em;
+}
+.ap-meta{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:8px;
+  letter-spacing:0.14em;color:rgba(138,176,190,0.4);
+  text-align:center;margin-bottom:16px;
+}
+.ap-spiral-wrap{display:flex;justify-content:center;margin-top:8px;margin-bottom:32px;cursor:default;overflow:hidden;}
+.ap-divider{width:100%;height:0.5px;background:rgba(138,176,190,0.10);margin-bottom:20px;}
+.ap-events-title{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:8px;
+  letter-spacing:0.16em;color:rgba(138,176,190,0.35);margin-bottom:14px;
+}
+.ap-event-item{
+  font-family:'Cormorant Garamond',serif;font-weight:300;font-size:14px;
+  letter-spacing:0.02em;color:rgba(228,232,228,0.55);
+  padding:8px 0;border-bottom:0.5px solid rgba(138,176,190,0.07);
+  cursor:pointer;transition:color 0.2s;display:flex;align-items:center;gap:10px;
+}
+.ap-event-item:hover{color:rgba(228,232,228,0.90)}
+.ap-event-day{
+  font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.12em;
+  color:rgba(138,176,190,0.30);min-width:28px;
+}
+
+/* event panel */
+.ep-header{
+  display:flex;align-items:center;gap:12px;margin-bottom:32px;
+}
+.ep-mini-glyph{cursor:pointer;opacity:0.8;transition:opacity 0.2s;flex-shrink:0;}
+.ep-mini-glyph:hover{opacity:1;}
+.ep-title{
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
+  font-size:22px;letter-spacing:0.03em;color:rgba(228,232,228,0.9);
+}
+.ep-day{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:8px;
+  letter-spacing:0.14em;color:rgba(138,176,190,0.35);margin-bottom:28px;
+}
+.ep-three-col{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;margin-bottom:28px;align-items:start;}
+.ep-block-label{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:7.5px;
+  letter-spacing:0.16em;color:rgba(138,176,190,0.30);margin-bottom:10px;
+}
+.ep-block-text{
+  font-family:'Cormorant Garamond',serif;font-weight:300;font-size:13px;
+  line-height:1.75;color:rgba(228,232,228,0.6);letter-spacing:0.01em;
+}
+.ep-center-glyph{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  cursor:pointer;padding:0 4px;
+}
+.ep-center-glyph:hover .ep-archetype-link{color:rgba(196,154,58,0.9);}
+.ep-archetype-link{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:7px;
+  letter-spacing:0.12em;color:rgba(196,154,58,0.5);
+  text-align:center;white-space:nowrap;transition:color 0.2s;
+}
+.ep-divider{width:100%;height:0.5px;background:rgba(138,176,190,0.10);margin-bottom:20px;}
+.ep-neighbors-title{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:8px;
+  letter-spacing:0.16em;color:rgba(138,176,190,0.35);margin-bottom:14px;
+}
+.ep-neighbor{
+  display:flex;align-items:center;gap:12px;
+  padding:9px 0;border-bottom:0.5px solid rgba(138,176,190,0.07);
+  cursor:pointer;transition:opacity 0.2s;
+}
+.ep-neighbor:hover{opacity:1!important;}
+.ep-neighbor-label{
+  font-family:'Cormorant Garamond',serif;font-weight:300;font-size:14px;
+  color:rgba(228,232,228,0.55);
+}
+.ep-neighbor-arch{
+  font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.10em;
+  color:rgba(138,176,190,0.30);margin-left:auto;
+}
+.loading-myth{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:8px;
+  letter-spacing:0.12em;color:rgba(138,176,190,0.25);
+  text-align:center;animation:pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:0.25}50%{opacity:0.6}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="grain"></div>
+  <div class="title-tag" id="view-title">STRATA — time</div>
+  <div class="view-toggle">
+    <button class="view-btn active" id="btn-strata">strata</button>
+    <div class="sep"></div>
+    <button class="view-btn" id="btn-resonance">resonance</button>
+  </div>
+</div>
+
+<!-- Side panel -->
+<div id="clickables"></div>
+<div id="side-panel">
+  <button id="panel-close">✕ close</button>
+  <div id="panel-content"></div>
+</div>
+
+<script>
+// ── CANVAS SETUP ──────────────────────────────────────────────────────
+const CV=document.getElementById('c');
+const ctx=CV.getContext('2d');
+const ui=document.getElementById('ui');
+const DPR=window.devicePixelRatio||1;
+const W=window.innerWidth;
+const H=window.innerHeight;
+CV.width=W*DPR; CV.height=H*DPR;
+CV.style.width=W+'px'; CV.style.height=H+'px';
+ctx.scale(DPR,DPR);
+
+// ── PALETTE ───────────────────────────────────────────────────────────
+const GOLD=[196,154,58];
+const VIOLET=[138,138,170];
+const RIVER=[138,176,190];
+const BONE=[228,232,228];
+
+// ── ARCHETYPE GLYPHS ──────────────────────────────────────────────────
+// Each glyph is an SVG string, sized at the given viewBox
+// Colors will be injected at render time
+const GLYPHS={
+  dream: (col,sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- The Gate: bisected threshold, portal arch, two uprights -->
+    <line x1="30" y1="8" x2="30" y2="52" stroke="${col}" stroke-width="0.8" opacity="0.9"/>
+    <path d="M14 36 Q14 18 30 18 Q46 18 46 36" stroke="${col}" stroke-width="0.9" fill="none"/>
+    <line x1="14" y1="36" x2="14" y2="52" stroke="${col}" stroke-width="0.8"/>
+    <line x1="46" y1="36" x2="46" y2="52" stroke="${col}" stroke-width="0.8"/>
+    <line x1="10" y1="52" x2="50" y2="52" stroke="${col}" stroke-width="0.6" opacity="0.5"/>
+    <circle cx="30" cy="18" r="2" fill="${col}" opacity="0.7"/>
+  </svg>`,
+
+  body: (col,sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- What the Body Keeps: tide curves, double arc, horizon -->
+    <path d="M8 38 Q20 22 32 30 Q44 38 52 22" stroke="${col}" stroke-width="0.9" fill="none"/>
+    <path d="M8 44 Q20 28 32 36 Q44 44 52 28" stroke="${col}" stroke-width="0.7" fill="none" opacity="0.5"/>
+    <path d="M8 32 Q20 16 32 24 Q44 32 52 16" stroke="${col}" stroke-width="0.5" fill="none" opacity="0.3"/>
+    <line x1="8" y1="50" x2="52" y2="50" stroke="${col}" stroke-width="0.5" opacity="0.3"/>
+  </svg>`,
+
+  food: (col,sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- The Table: radial spokes from center, gathering -->
+    <circle cx="30" cy="30" r="3" fill="${col}" opacity="0.8"/>
+    <circle cx="30" cy="30" r="14" stroke="${col}" stroke-width="0.6" opacity="0.4"/>
+    ${[0,45,90,135,180,225,270,315].map(a=>{
+      const r=a*Math.PI/180;
+      return `<line x1="30" y1="30" x2="${30+Math.cos(r)*22}" y2="${30+Math.sin(r)*22}" stroke="${col}" stroke-width="0.7" opacity="0.75"/>
+      <circle cx="${30+Math.cos(r)*22}" cy="${30+Math.sin(r)*22}" r="1.2" fill="${col}" opacity="0.6"/>`;
+    }).join('')}
+  </svg>`,
+
+  silence: (col,sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- The Silence: single vertical mark, sparse negative space -->
+    <line x1="30" y1="12" x2="30" y2="48" stroke="${col}" stroke-width="0.9"/>
+    <line x1="26" y1="12" x2="34" y2="12" stroke="${col}" stroke-width="0.6" opacity="0.6"/>
+    <line x1="28" y1="48" x2="32" y2="48" stroke="${col}" stroke-width="0.6" opacity="0.6"/>
+    <circle cx="30" cy="30" r="1.2" fill="${col}" opacity="0.5"/>
+  </svg>`,
+
+  memory: (col,sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- The Root: downward fork, branching -->
+    <line x1="30" y1="10" x2="30" y2="28" stroke="${col}" stroke-width="0.9"/>
+    <line x1="30" y1="28" x2="18" y2="42" stroke="${col}" stroke-width="0.8"/>
+    <line x1="30" y1="28" x2="42" y2="42" stroke="${col}" stroke-width="0.8"/>
+    <line x1="18" y1="42" x2="12" y2="52" stroke="${col}" stroke-width="0.6" opacity="0.6"/>
+    <line x1="18" y1="42" x2="24" y2="52" stroke="${col}" stroke-width="0.6" opacity="0.6"/>
+    <line x1="42" y1="42" x2="36" y2="52" stroke="${col}" stroke-width="0.6" opacity="0.6"/>
+    <line x1="42" y1="42" x2="48" y2="52" stroke="${col}" stroke-width="0.6" opacity="0.6"/>
+    <circle cx="30" cy="10" r="1.5" fill="${col}" opacity="0.7"/>
+  </svg>`,
+
+  writing: (col,sz)=>`<svg width="${sz}" height="${sz}" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- The Hand: directional mark, gesture in motion -->
+    <path d="M12 44 L42 16" stroke="${col}" stroke-width="0.9"/>
+    <path d="M38 12 L46 20 L40 18 L42 26" stroke="${col}" stroke-width="0.7" fill="none"/>
+    <line x1="12" y1="44" x2="20" y2="46" stroke="${col}" stroke-width="0.5" opacity="0.5"/>
+    <line x1="12" y1="44" x2="10" y2="36" stroke="${col}" stroke-width="0.5" opacity="0.5"/>
+    <path d="M20 36 Q28 30 36 36" stroke="${col}" stroke-width="0.5" fill="none" opacity="0.4"/>
+  </svg>`,
+};
+
+// ── SEMANTIC CLUSTERS ─────────────────────────────────────────────────
+const CLUSTERS=[
+  {id:'dream',    name:'The Gate',            cx:0,cy:0,r:78,  col:GOLD},
+  {id:'body',     name:'What the Body Keeps', cx:0,cy:0,r:72,  col:RIVER},
+  {id:'food',     name:'The Table',           cx:0,cy:0,r:70,  col:GOLD},
+  {id:'silence',  name:'The Silence',         cx:0,cy:0,r:64,  col:VIOLET},
+  {id:'memory',   name:'The Root',            cx:0,cy:0,r:76,  col:VIOLET},
+  {id:'writing',  name:'The Hand',            cx:0,cy:0,r:62,  col:RIVER},
+];
+const CLUSTER_ANGLES=[
+  -Math.PI/2+0.1, -Math.PI/6,
+  Math.PI/6+0.1,  Math.PI/2+0.05,
+  Math.PI-Math.PI/6, -Math.PI+Math.PI/6-0.05
+];
+const CR=Math.min(W,H)*0.28;
+CLUSTERS.forEach((cl,i)=>{
+  cl.cx=W*0.5+Math.cos(CLUSTER_ANGLES[i])*CR;
+  cl.cy=H*0.5+Math.sin(CLUSTER_ANGLES[i])*CR;
+  cl.mythText=null; cl.mythLoading=false;
+});
+
+// ── TAG → CLUSTER ─────────────────────────────────────────────────────
+const TC={
+  dream:'dream',threshold:'dream',migration:'dream',
+  body:'body',water:'body',morning:'body',
+  food:'food',connection:'food',social:'food',
+  silence:'silence',solitude:'silence',
+  memory:'memory',family:'memory',language:'memory',
+  writing:'writing',fieldwork:'writing',
+};
+function primaryCluster(tags){for(const t of tags){if(TC[t])return TC[t];}return 'memory';}
+function allClusters(tags){return[...new Set(tags.map(t=>TC[t]).filter(Boolean))];}
+
+// ── EVENT DATA ────────────────────────────────────────────────────────
+const EVENTS=[
+  {label:'arrived',               day:0,  tags:['migration','threshold','body'],    xs:0.50, note:'Landed just before dark. Stood outside with the bags.'},
+  {label:'first dinner here',     day:0,  tags:['food','connection','memory'],       xs:0.76, note:'Ate with people I barely know. Something loosened.'},
+  {label:'unpacked in silence',   day:0,  tags:['silence','solitude','threshold'],  xs:0.12, note:'Didn\'t turn music on. Let the room be what it was.'},
+  {label:'walked the block',      day:0,  tags:['body','morning','memory'],          xs:0.55, note:'First walk. Mapping by foot.'},
+  {label:'dream: corridor',       day:1,  tags:['dream','threshold','silence'],      xs:0.14, note:'Long hallway. Door at the end, wouldn\'t open.'},
+  {label:'ran at 6am',            day:1,  tags:['body','morning','threshold'],       xs:0.52, note:'Still dark. First run here. Body remembering itself.'},
+  {label:'market morning',        day:1,  tags:['food','social','body'],             xs:0.80, note:'Crowded. Bought too many things. Good noise.'},
+  {label:"couldn't write",        day:1,  tags:['writing','threshold','silence'],    xs:0.28, note:'Sat for two hours. Nothing came. Closed the notebook.'},
+  {label:'bought fruit alone',    day:1,  tags:['food','solitude','body'],           xs:0.62, note:'The small act of feeding oneself.'},
+  {label:'grandmother visit',     day:2,  tags:['family','memory','language'],       xs:0.38, note:'She spoke mostly in Hakka. I caught maybe a third.'},
+  {label:'swam alone',            day:2,  tags:['body','water','silence'],           xs:0.44, note:'Cold at first. Then nothing else.'},
+  {label:'dinner with M+P',       day:2,  tags:['food','connection','social'],       xs:0.82, note:'Long table. Four bottles. We talked until the restaurant closed.'},
+  {label:'found old photos',      day:2,  tags:['memory','family','silence'],        xs:0.22, note:'In a drawer I wasn\'t supposed to open.'},
+  {label:'afternoon nap',         day:2,  tags:['body','solitude','silence'],        xs:0.18, note:'Rare. Woke up not knowing where I was.'},
+  {label:'dream: flooded room',   day:3,  tags:['dream','water','threshold'],        xs:0.10, note:'Water coming under the door. I didn\'t move.'},
+  {label:'early morning, still',  day:3,  tags:['silence','solitude','body'],        xs:0.20, note:'4am. The whole city asleep. Felt like a privilege.'},
+  {label:'cooked for father',     day:3,  tags:['food','family','memory'],           xs:0.72, note:'The recipe was his mother\'s. He watched the whole time.'},
+  {label:'kept almost leaving',   day:3,  tags:['threshold','migration','silence'],  xs:0.32, note:'Three times I picked up the keys. Didn\'t.'},
+  {label:'gym, no music',         day:3,  tags:['body','solitude','silence'],        xs:0.24, note:'Wanted to hear myself.'},
+  {label:'coffee with neighbor',  day:3,  tags:['food','social','connection'],       xs:0.84, note:'He knows everyone here. Two hours. I learned names.'},
+  {label:'beach fire',            day:4,  tags:['social','body','water'],            xs:0.74, note:'Fire until it went out. Talked about nothing important.'},
+  {label:'museum alone',          day:4,  tags:['solitude','writing','memory'],      xs:0.30, note:'Spent forty minutes in front of one piece.'},
+  {label:'interview: father',     day:4,  tags:['family','memory','language'],       xs:0.34, note:'He paused before answering everything. Like he was checking.'},
+  {label:'wrote for 4 hours',     day:4,  tags:['writing','silence','threshold'],    xs:0.16, note:'Didn\'t eat. Forgot to. Good kind of forgetting.'},
+  {label:'walk on beach',         day:4,  tags:['body','water','morning'],           xs:0.58, note:'Tide marks. What the water left behind.'},
+  {label:'groceries, crowded',    day:4,  tags:['food','social','body'],             xs:0.78, note:'Saturday. Everyone out. I felt briefly part of something.'},
+  {label:'dream: leaving',        day:5,  tags:['dream','threshold','migration'],    xs:0.08, note:'Packing in a panic. Couldn\'t remember what I\'d come for.'},
+  {label:"father's stories",      day:5,  tags:['family','language','memory'],       xs:0.36, note:'He talked for three hours. I kept the recorder on.'},
+  {label:'swam at dusk',          day:5,  tags:['body','water','silence'],           xs:0.42, note:'The light going. Swam until I couldn\'t see the shore.'},
+  {label:'essay finished',        day:5,  tags:['writing','threshold','memory'],     xs:0.26, note:'Sent it before I could change my mind again.'},
+  {label:'dinner: migration talk',day:5,  tags:['food','migration','social'],        xs:0.76, note:'Everyone at the table had crossed something.'},
+  {label:'read till 2am',         day:5,  tags:['writing','solitude','silence'],     xs:0.18, note:'Couldn\'t stop. The book was finishing something in me.'},
+  {label:'sat by water',          day:6,  tags:['water','silence','solitude'],       xs:0.22, note:'Just sat. For a long time.'},
+  {label:'dream: old house',      day:6,  tags:['dream','memory','family'],          xs:0.14, note:'The house from before. Different rooms now.'},
+  {label:'cooked grandmother dish',day:6, tags:['food','family','memory'],           xs:0.70, note:'I had to guess at the proportions. She never measured.'},
+  {label:'language lesson',       day:6,  tags:['language','family','memory'],       xs:0.38, note:'Learning the words for things I already know.'},
+  {label:'late run, rain',        day:6,  tags:['body','morning','solitude'],        xs:0.46, note:'Ran through it. Came back soaked. Felt real.'},
+  {label:'market with aunt',      day:6,  tags:['food','social','family'],           xs:0.82, note:'She bargained for everything. I watched and learned.'},
+  {label:'morning swim',          day:7,  tags:['body','water','morning'],           xs:0.48, note:'First light on the water. The only one out.'},
+  {label:'dream: the crossing',   day:7,  tags:['dream','water','migration'],        xs:0.10, note:'Boat. Dark water. I knew where I was going but not why.'},
+  {label:'hiked alone',           day:7,  tags:['body','solitude','morning'],        xs:0.40, note:'Three hours up. No one passed me going either way.'},
+  {label:'long walk home',        day:7,  tags:['body','memory','silence'],          xs:0.32, note:'Took the long way. Let the city arrange itself around me.'},
+  {label:'street food with T',    day:7,  tags:['food','social','connection'],       xs:0.86, note:'Ate standing. Talked fast. Haven\'t laughed like that in weeks.'},
+  {label:'transcribed notes',     day:7,  tags:['writing','fieldwork','memory'],     xs:0.20, note:'Four hours of audio into text. The voice on the tape.'},
+  {label:'brought bread again',   day:8,  tags:['food','family','connection'],       xs:0.72, note:'Same bread. She noticed. Said nothing. Smiled.'},
+  {label:'finished chapter',      day:8,  tags:['writing','memory','threshold'],     xs:0.24, note:'The ending came from somewhere I hadn\'t planned.'},
+  {label:'river walk',            day:8,  tags:['body','water','morning'],           xs:0.50, note:'Followed it for two hours. Turned back before the dam.'},
+  {label:'dream: voices',         day:8,  tags:['dream','language','family'],        xs:0.12, note:'Voices I recognized but couldn\'t place. Speaking all at once.'},
+  {label:'sat in sunlight',       day:8,  tags:['body','silence','solitude'],        xs:0.28, note:'An hour. Didn\'t bring anything to read.'},
+  {label:'called home',           day:8,  tags:['family','connection','language'],   xs:0.66, note:'Long call. The distance audible in the silence between sentences.'},
+  {label:'dream: the threshold',  day:9,  tags:['dream','threshold','silence'],      xs:0.08, note:'Standing in a doorway that kept moving.'},
+  {label:'yoga before dawn',      day:9,  tags:['body','morning','silence'],         xs:0.36, note:'The room still dark. Just the breath.'},
+  {label:'wrote letters unsent',  day:9,  tags:['writing','memory','silence'],       xs:0.16, note:'Four letters. Kept them all.'},
+  {label:'lunch party',           day:9,  tags:['food','social','connection'],       xs:0.88, note:'House full of people. I knew half of them by the end.'},
+  {label:'found grandmother note',day:9,  tags:['memory','family','language'],       xs:0.42, note:'In the back of a book. Three lines. Her handwriting.'},
+  {label:'walked to old school',  day:9,  tags:['memory','body','migration'],        xs:0.54, note:'Different now. Small in a way buildings get when you grow.'},
+  {label:'dream: open water',     day:10, tags:['dream','water','threshold'],        xs:0.06, note:'No shore. Not scared. Just open.'},
+  {label:'morning pages',         day:10, tags:['writing','morning','silence'],      xs:0.14, note:'Three pages before coffee. The rule I keep.'},
+  {label:'swam before breakfast', day:10, tags:['body','water','morning'],           xs:0.44, note:'Cold. Good. Hungry after in the right way.'},
+  {label:'fieldwork interview',   day:10, tags:['fieldwork','writing','memory'],     xs:0.22, note:'She cried once. I kept recording. Asked if I should stop. She said no.'},
+  {label:'dinner with everyone',  day:10, tags:['food','social','family'],           xs:0.84, note:'The whole family. Too loud. Perfect.'},
+  {label:"couldn't sleep",        day:10, tags:['silence','threshold','solitude'],   xs:0.18, note:'3am. Lay still. Let the dark be what it was.'},
+  {label:'picked up shells',      day:10, tags:['body','water','memory'],            xs:0.48, note:'Pockets full. Evidence of the days.'},
+  {label:'read outside',          day:10, tags:['writing','body','solitude'],        xs:0.30, note:'Wind kept turning the pages. I let it.'},
+  {label:"neighbor's birthday",   day:10, tags:['social','food','connection'],       xs:0.90, note:'Cake at noon. Strangers who became familiar.'},
+  {label:'wrote in the dark',     day:10, tags:['writing','silence','threshold'],    xs:0.10, note:'Didn\'t turn the light on. Wrote until I couldn\'t read my own handwriting.'},
+];
+
+// ── STRATA POSITIONS ──────────────────────────────────────────────────
+const DAYS=[...new Set(EVENTS.map(e=>e.day))].sort((a,b)=>b-a);
+const NUM_DAYS=DAYS.length;
+const TOP_PAD=60,BOT_PAD=52;
+const STRATA_SPACING=(H-TOP_PAD-BOT_PAD)/(NUM_DAYS-1||1);
+const DAY_Y={};
+DAYS.forEach((d,i)=>{DAY_Y[d]=TOP_PAD+i*STRATA_SPACING;});
+
+const dayGroups={};
+EVENTS.forEach(e=>{if(!dayGroups[e.day])dayGroups[e.day]=[];dayGroups[e.day].push(e);});
+Object.values(dayGroups).forEach(grp=>{
+  grp.sort((a,b)=>a.xs-b.xs);
+  const n=grp.length;
+  const nLines=n<=4?1:n<=8?2:3;
+  grp.forEach((e,i)=>{e.subLine=i%nLines;e.nSubLines=nLines;});
+});
+
+const SUB_LINE_OFFSET=10;
+const L_PAD=62,R_PAD=18;
+EVENTS.forEach(e=>{
+  e.strataX=L_PAD+(e.xs)*(W-L_PAD-R_PAD);
+  e.strataY=DAY_Y[e.day]+(e.subLine-(e.nSubLines-1)/2)*SUB_LINE_OFFSET;
+});
+
+// ── RESONANCE POSITIONS ────────────────────────────────────────────────
+EVENTS.forEach((e,i)=>{
+  const pid=primaryCluster(e.tags);
+  const cl=CLUSTERS.find(c=>c.id===pid);
+  const uncertain=allClusters(e.tags).length>=2;
+  const clEvents=EVENTS.filter(ev=>primaryCluster(ev.tags)===pid);
+  const cidx=clEvents.indexOf(e);
+  const total=clEvents.length;
+  const baseAngle=(cidx/total)*Math.PI*2-Math.PI/2;
+  const rv=(((i*17+cidx*7)%20)-10)/10;
+  e.resX=cl.cx+Math.cos(baseAngle)*cl.r*(0.72+rv*0.28);
+  e.resY=cl.cy+Math.sin(baseAngle)*cl.r*(0.72+rv*0.28);
+  e.resCluster=cl;
+  e.uncertain=uncertain;
+  e.driftSpeed=uncertain?(0.4+Math.random()*0.6):(0.15+Math.random()*0.2);
+  e.driftRadius=uncertain?(10+Math.random()*14):(2+Math.random()*5);
+  e.driftPhase=Math.random()*Math.PI*2;
+  e.cx=e.strataX; e.cy=e.strataY;
+});
+
+// Precompute per-event shared-tag count within cluster
+EVENTS.forEach((e,i)=>{
+  const pid=primaryCluster(e.tags);
+  const siblings=EVENTS.filter((s,j)=>j!==i&&primaryCluster(s.tags)===pid);
+  e.clusterSharedTags=siblings.reduce((sum,s)=>{
+    const shared=e.tags.filter(t=>s.tags.includes(t)).length;
+    return sum+shared;
+  },0);
+});
+
+// ── EDGES ─────────────────────────────────────────────────────────────
+function tagSim(a,b){
+  const sa=new Set(a),sb=new Set(b);
+  return[...sa].filter(t=>sb.has(t)).length/new Set([...a,...b]).size;
+}
+const EDGES=[];
+for(let i=0;i<EVENTS.length;i++){
+  for(let j=i+1;j<EVENTS.length;j++){
+    const s=tagSim(EVENTS[i].tags,EVENTS[j].tags);
+    if(s>=0.2){
+      const s1=(i*17.3+j*11.7)%1,s2=(i*23.1+j*7.9)%1,s3=(i*13.5+j*19.3)%1;
+      EDGES.push({a:i,b:j,s,glow:0,
+        strataCpX:(s1-0.5)*80,strataCpY:(s2-0.5)*30,
+        resCp1x:(s1-0.5)*160,resCp1y:(s2-0.5)*130,
+        resCp2x:(s3-0.5)*160,resCp2y:(s1-0.5)*130,
+        ghostOff1:(s2-0.5)*50,ghostOff2:(s3-0.5)*50,
+      });
+    }
+  }
+}
+
+// ── ARCHETYPE STRATA POSITIONS ─────────────────────────────────────────
+const ARCHETYPES=CLUSTERS.map(cl=>{
+  const evs=EVENTS.filter(e=>primaryCluster(e.tags)===cl.id);
+  if(!evs.length)return null;
+  const avgXs=evs.reduce((s,e)=>s+e.xs,0)/evs.length;
+  const avgDay=evs.reduce((s,e)=>s+e.day,0)/evs.length;
+  const nearDay=DAYS.slice().sort((a,b)=>Math.abs(a-avgDay)-Math.abs(b-avgDay))[0];
+  return{name:cl.name,x:L_PAD+avgXs*(W-L_PAD-R_PAD),y:DAY_Y[nearDay],col:cl.col,id:cl.id,el:null};
+}).filter(Boolean);
+
+// ── DOM: EVENT LABELS ──────────────────────────────────────────────────
+EVENTS.forEach((e,i)=>{
+  const el=document.createElement('div');
+  el.className='event-label';
+  el.textContent=e.label;
+  ui.appendChild(el);
+  e.labelEl=el;
+});
+
+// ── DOM: CLUSTER NAMES (resonance) ────────────────────────────────────
+const clickables=document.getElementById('clickables');
+CLUSTERS.forEach(cl=>{
+  const el=document.createElement('div');
+  el.className='cluster-name';
+  el.textContent=cl.name;
+  el.style.left=cl.cx+'px';
+  el.style.top=(cl.cy-cl.r-22)+'px';
+  el.style.color='rgba(0,0,0,0)';
+  el.style.pointerEvents='all';
+  el.addEventListener('click',()=>openArchetypePanel(cl.id));
+  clickables.appendChild(el);
+  cl.nameEl=el;
+});
+
+// ── DOM: ARCHETYPE LABELS (strata) ────────────────────────────────────
+ARCHETYPES.forEach(a=>{
+  const el=document.createElement('div');
+  el.className='strata-archetype';
+  el.textContent=a.name;
+  el.style.left=a.x+'px';
+  el.style.top=a.y+'px';
+  el.style.color='rgba(0,0,0,0)';
+  el.style.pointerEvents='all';
+  el.addEventListener('click',()=>openArchetypePanel(a.id));
+  clickables.appendChild(el);
+  a.el=el;
+});
+
+// ── DOM: AXIS LABELS ──────────────────────────────────────────────────
+const axisLeft=document.createElement('div');
+axisLeft.className='axis-label-left';
+axisLeft.textContent='inward · dream · solitude';
+axisLeft.style.bottom='36px';axisLeft.style.left=L_PAD+'px';
+ui.appendChild(axisLeft);
+
+const axisRight=document.createElement('div');
+axisRight.className='axis-label-right';
+axisRight.textContent='social · food · connection';
+axisRight.style.bottom='36px';axisRight.style.right=R_PAD+'px';
+ui.appendChild(axisRight);
+
+const axisLine=document.createElement('div');
+axisLine.style.cssText=`position:absolute;bottom:42px;left:${L_PAD+180}px;right:${R_PAD+180}px;
+  height:0.5px;background:linear-gradient(to right,rgba(138,176,190,0.08),rgba(138,176,190,0.25),rgba(138,176,190,0.08));
+  pointer-events:none;`;
+ui.appendChild(axisLine);
+
+// Day labels + ticks
+DAYS.forEach(d=>{
+  const daysAgo=DAYS[0]-d;
+  const lbl=document.createElement('div');
+  lbl.style.cssText=`position:absolute;font-family:'DM Mono',monospace;font-weight:300;
+    font-size:9px;letter-spacing:0.10em;color:rgba(138,176,190,0.55);
+    transform:translateY(-50%);pointer-events:none;left:8px;top:${DAY_Y[d]}px;`;
+  lbl.textContent=daysAgo===0?'now':`−${daysAgo}d`;
+  ui.appendChild(lbl);
+  const tick=document.createElement('div');
+  tick.style.cssText=`position:absolute;left:${L_PAD-8}px;top:${DAY_Y[d]}px;
+    width:6px;height:0.5px;background:rgba(138,176,190,0.35);
+    transform:translateY(-50%);pointer-events:none;`;
+  ui.appendChild(tick);
+});
+
+// ── STATE ─────────────────────────────────────────────────────────────
+let viewMode='strata',transProgress=0,transDir=0,tick=0,hovNode=-1;
+const mouse={x:-9999,y:-9999};
+let panelOpen=false;
+
+// ── CLICK HANDLING ────────────────────────────────────────────────────
+CV.addEventListener('mousemove',ev=>{
+  const r=CV.getBoundingClientRect();
+  mouse.x=ev.clientX-r.left;mouse.y=ev.clientY-r.top;
+  let best=-1,bestD=22;
+  EVENTS.forEach((e,i)=>{
+    const d=Math.hypot(mouse.x-e.cx,mouse.y-e.cy);
+    if(d<bestD){bestD=d;best=i;}
+  });
+  hovNode=best;
+  CV.style.cursor=best>=0?'pointer':'default';
+});
+CV.addEventListener('mouseleave',()=>{mouse.x=-9999;hovNode=-1;CV.style.cursor='default';});
+CV.addEventListener('click',ev=>{
+  if(hovNode>=0){openEventPanel(hovNode);return;}
+  // click on empty = close panel
+  if(panelOpen)closePanel();
+});
+
+// Overlay dismiss — only on explicit outside clicks, not canvas (canvas has its own handler)
+document.addEventListener('click',ev=>{
+  const panel=document.getElementById('side-panel');
+  if(!panelOpen)return;
+  if(panel.contains(ev.target))return;
+  if(ev.target===CV)return; // canvas handles its own dismiss
+  if(clickables.contains(ev.target))return; // archetype labels handled separately
+  closePanel();
+});
+
+// ── TOGGLE ────────────────────────────────────────────────────────────
+document.getElementById('btn-strata').addEventListener('click',()=>{
+  if(viewMode==='strata')return;
+  viewMode='strata';transDir=-1;
+  document.getElementById('btn-strata').classList.add('active');
+  document.getElementById('btn-resonance').classList.remove('active');
+  document.getElementById('view-title').textContent='STRATA — time';
+});
+document.getElementById('btn-resonance').addEventListener('click',()=>{
+  if(viewMode==='resonance')return;
+  viewMode='resonance';transDir=1;
+  document.getElementById('btn-resonance').classList.add('active');
+  document.getElementById('btn-strata').classList.remove('active');
+  document.getElementById('view-title').textContent='RESONANCE — pattern';
+});
+
+document.getElementById('panel-close').addEventListener('click',closePanel);
+
+// ── PANEL HELPERS ─────────────────────────────────────────────────────
+function closePanel(){
+  document.getElementById('side-panel').classList.remove('open');
+  panelOpen=false;
+}
+function openPanel(html){
+  document.getElementById('panel-content').innerHTML=html;
+  document.getElementById('side-panel').classList.add('open');
+  panelOpen=true;
+}
+
+// colToHex helper
+function colToHex([r,g,b]){return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
+function colToRgba([r,g,b],a){return`rgba(${r},${g},${b},${a})`;}
+
+// ── SPIRAL CANVAS ─────────────────────────────────────────────────────
+// Returns an <canvas> element with an animated coil drawn on it
+// events: array of event objects in this cluster
+// col: [r,g,b]
+function makeSpiral(clEvents,col,width,height){
+  const sc=document.createElement('canvas');
+  sc.width=width*DPR; sc.height=height*DPR;
+  sc.style.width=width+'px'; sc.style.height=height+'px';
+  const sctx=sc.getContext('2d');
+  sctx.scale(DPR,DPR);
+
+  // Sort events oldest→newest
+  const evs=[...clEvents].sort((a,b)=>a.day-b.day);
+  const N=evs.length;
+  // Compress: max height per loop
+  const maxH=Math.min(height*0.85/N, 30);
+  const loopH=Math.max(12,maxH);
+  const totalH=loopH*N;
+  const startY=(height-totalH)/2;
+
+  // Precompute loop diameters based on clusterSharedTags
+  const maxShared=Math.max(...evs.map(e=>e.clusterSharedTags),1);
+  const minD=14,maxD=width*0.55;
+  const diameters=evs.map(e=>minD+(e.clusterSharedTags/maxShared)*(maxD-minD));
+
+  const [cr,cg,cb]=col;
+  const cx=width/2;
+
+  let rotAngle=0;
+  let animId;
+
+  function drawSpiral(angle){
+    sctx.clearRect(0,0,width,height);
+
+    // Draw thread lines — many parallel lines per loop
+    const nThreads=18;
+    for(let li=0;li<N;li++){
+      const d=diameters[li];
+      const rx=d/2;
+      const ry=loopH/2;
+      const loopCY=startY+li*loopH+ry;
+
+      for(let th=0;th<nThreads;th++){
+        const tOff=(th/nThreads)*Math.PI*2;
+        // Each thread is a slightly offset copy of the ellipse
+        const threadOff=(th-nThreads/2)*(rx*0.04);
+        const opacity=0.06+0.22*(1-Math.abs(th-nThreads/2)/(nThreads/2));
+
+        sctx.beginPath();
+        // Draw half-ellipse (front face of coil)
+        let first=true;
+        for(let a=0;a<=Math.PI;a+=0.08){
+          const rotA=a+angle+tOff*0.1;
+          const px=cx+threadOff+(rx+threadOff*0.2)*Math.cos(rotA);
+          const py=loopCY+ry*Math.sin(rotA);
+          if(first){sctx.moveTo(px,py);first=false;}
+          else sctx.lineTo(px,py);
+        }
+        sctx.strokeStyle=`rgba(${cr},${cg},${cb},${opacity})`;
+        sctx.lineWidth=0.6;
+        sctx.stroke();
+
+        // Back face (darker)
+        sctx.beginPath();
+        first=true;
+        for(let a=Math.PI;a<=Math.PI*2;a+=0.08){
+          const rotA=a+angle+tOff*0.1;
+          const px=cx+threadOff+rx*Math.cos(rotA);
+          const py=loopCY+ry*Math.sin(rotA);
+          if(first){sctx.moveTo(px,py);first=false;}
+          else sctx.lineTo(px,py);
+        }
+        sctx.strokeStyle=`rgba(${cr},${cg},${cb},${opacity*0.35})`;
+        sctx.lineWidth=0.4;
+        sctx.stroke();
+      }
+
+      // Event label on the coil — visible when front-facing (cos(angle) > 0)
+      const frontness=(Math.cos(angle)+1)/2;
+      if(frontness>0.3){
+        const labelX=cx+diameters[li]/2+6;
+        const labelY=startY+li*loopH+ry;
+        sctx.font=`300 7.5px 'DM Mono', monospace`;
+        sctx.fillStyle=`rgba(${cr},${cg},${cb},${0.3+frontness*0.55})`;
+        sctx.textAlign='left';
+        sctx.fillText(evs[li].label,labelX,labelY+3);
+        // Day indicator
+        sctx.font=`300 6px 'DM Mono', monospace`;
+        sctx.fillStyle=`rgba(138,176,190,${0.2+frontness*0.3})`;
+        sctx.fillText(`−${DAYS[0]-evs[li].day}d`,labelX,labelY-4);
+      }
+    }
+
+    // Spine line
+    sctx.beginPath();
+    sctx.moveTo(cx,startY);sctx.lineTo(cx,startY+totalH);
+    sctx.strokeStyle=`rgba(${cr},${cg},${cb},0.12)`;
+    sctx.lineWidth=0.5;sctx.stroke();
+  }
+
+  function animate(){
+    rotAngle+=0.008;
+    drawSpiral(rotAngle);
+    animId=requestAnimationFrame(animate);
+  }
+  animate();
+  sc._stopAnim=()=>cancelAnimationFrame(animId);
+  return sc;
+}
+
+// ── MINI GLYPH SVG ────────────────────────────────────────────────────
+function miniGlyph(clusterId,size){
+  const cl=CLUSTERS.find(c=>c.id===clusterId);
+  const hexCol=colToHex(cl.col);
+  return GLYPHS[clusterId](hexCol,size);
+}
+
+// ── OPEN ARCHETYPE PANEL ──────────────────────────────────────────────
+function openArchetypePanel(clusterId){
+  const cl=CLUSTERS.find(c=>c.id===clusterId);
+  const clEvents=EVENTS.filter(e=>primaryCluster(e.tags)===clusterId);
+  const [cr,cg,cb]=cl.col;
+  const hexCol=colToHex(cl.col);
+
+  openPanel(`
+    <div class="ap-glyph">${GLYPHS[clusterId](hexCol,72)}</div>
+    <div class="ap-name">${cl.name}</div>
+    <div class="ap-myth" id="ap-myth-text">
+      <span class="loading-myth">reading the pattern…</span>
+    </div>
+    <div class="ap-meta">${clEvents.length} events · ${clusterId}</div>
+    <div class="ap-divider"></div>
+    <div class="ap-spiral-wrap" id="ap-spiral-mount"></div>
+  `);
+
+  // Mount spiral canvas — defer one frame so panel content has rendered height
+  const spiralMount=document.getElementById('ap-spiral-mount');
+  if(spiralMount){
+    const spiralW=316;
+    // Calculate how much vertical space is left below the header
+    requestAnimationFrame(()=>{
+      const panelContent=document.getElementById('panel-content');
+      const mount=document.getElementById('ap-spiral-mount');
+      if(!mount)return;
+      const mountTop=mount.getBoundingClientRect().top;
+      const panelBottom=document.getElementById('side-panel').getBoundingClientRect().bottom;
+      const available=Math.max(200, panelBottom-mountTop-64);
+      const byEvents=Math.min(clEvents.length*28+80, available);
+      const spiralH=Math.max(220, byEvents);
+      const sc=makeSpiral(clEvents,cl.col,spiralW,spiralH);
+      mount.appendChild(sc);
+      document.getElementById('side-panel')._stopSpiral=sc._stopAnim;
+    });
+  }
+
+  // Fetch myth
+  fetchMyth(cl,clEvents);
+}
+
+// ── OPEN EVENT PANEL ──────────────────────────────────────────────────
+function openEventPanel(idx){
+  const e=EVENTS[idx];
+  const cl=e.resCluster||CLUSTERS[0];
+  const [cr,cg,cb]=cl.col;
+  const dAgo=DAYS[0]-e.day;
+  const hexCol=colToHex(cl.col);
+
+  // Resonant neighbours (top 3 by tag sim, excluding self)
+  const neighbors=EVENTS
+    .map((ev,i)=>({ev,i,s:tagSim(e.tags,ev.tags)}))
+    .filter(x=>x.i!==idx&&x.s>=0.2)
+    .sort((a,b)=>b.s-a.s)
+    .slice(0,3);
+
+  openPanel(`
+    <div class="ep-header">
+      <div class="ep-mini-glyph" id="ep-glyph-btn" title="open ${cl.name}">
+        ${GLYPHS[cl.id](hexCol,40)}
+      </div>
+      <div class="ep-title">${e.label}</div>
+    </div>
+    <div class="ep-day">${dAgo===0?'now':`−${dAgo}d`} · ${cl.name}</div>
+
+    <div class="ep-three-col">
+      <div>
+        <div class="ep-block-label">from the record</div>
+        <div class="ep-block-text">${e.note||'No notes recorded.'}</div>
+        <div style="margin-top:10px">
+          ${e.tags.map(t=>`<span style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.1em;
+            color:rgba(138,176,190,0.35);margin-right:8px;">${t}</span>`).join('')}
+        </div>
+      </div>
+      <div class="ep-center-glyph" id="ep-center-glyph-btn">
+        ${GLYPHS[cl.id](hexCol,52)}
+        <div class="ep-archetype-link">${cl.name}</div>
+      </div>
+      <div>
+        <div class="ep-block-label">archetype</div>
+        <div class="ep-block-text" id="ep-myth-text">
+          <span class="loading-myth">reading…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ep-divider"></div>
+    <div class="ep-neighbors-title">resonant neighbours</div>
+    ${neighbors.map(({ev,i:ni,s})=>{
+      const ncl=ev.resCluster||CLUSTERS[0];
+      const nhex=colToHex(ncl.col);
+      const ndAgo=DAYS[0]-ev.day;
+      return`<div class="ep-neighbor" data-idx="${ni}" style="opacity:${0.5+s*0.5}">
+        <span style="flex-shrink:0">${GLYPHS[ncl.id](nhex,18)}</span>
+        <span class="ep-neighbor-label">${ev.label}</span>
+        <span class="ep-neighbor-arch">${ncl.name}</span>
+      </div>`;
+    }).join('')}
+  `);
+
+  // Glyph → archetype panel
+  document.getElementById('ep-glyph-btn')?.addEventListener('click',()=>openArchetypePanel(cl.id));
+  document.getElementById('ep-center-glyph-btn')?.addEventListener('click',()=>openArchetypePanel(cl.id));
+
+  // Neighbor clicks
+  document.querySelectorAll('.ep-neighbor').forEach(el=>{
+    el.addEventListener('click',()=>openEventPanel(parseInt(el.dataset.idx)));
+  });
+
+  // Fetch myth for this archetype (populates ep-myth-text)
+  fetchMyth(cl,EVENTS.filter(ev=>primaryCluster(ev.tags)===cl.id),'ep-myth-text');
+}
+
+// ── FETCH MYTH ────────────────────────────────────────────────────────
+const mythCache={};
+function fetchMyth(cl,clEvents,targetId='ap-myth-text'){
+  if(mythCache[cl.id]){
+    const el=document.getElementById(targetId);
+    if(el)el.textContent=mythCache[cl.id];
+    return;
+  }
+  const prompt=`You are writing mythic, ancestral-register text — not explanation, not analysis. Short, poetic, oracular.
+
+Archetype: "${cl.name}"
+Events in this cluster: ${clEvents.map(e=>e.label).join(', ')}
+
+Write one sentence (20–35 words) in an ancestral register that names what this cluster is actually about — what thread runs through all these moments. Speak as if from the past looking forward. No quotation marks.`;
+
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:80,
+      messages:[{role:'user',content:prompt}]
+    })
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    const text=data?.content?.[0]?.text||'The pattern holds.';
+    mythCache[cl.id]=text;
+    const el=document.getElementById(targetId);
+    if(el)el.textContent=text;
+  })
+  .catch(()=>{
+    const el=document.getElementById(targetId);
+    if(el)el.textContent='The pattern holds.';
+  });
+}
+
+// Stop spiral animation when panel closes
+document.getElementById('panel-close').addEventListener('click',()=>{
+  const panel=document.getElementById('side-panel');
+  if(panel._stopSpiral){panel._stopSpiral();panel._stopSpiral=null;}
+});
+
+// ── EASING ────────────────────────────────────────────────────────────
+function easeInOut(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+
+// ── DRAW ──────────────────────────────────────────────────────────────
+function draw(){
+  tick+=0.007;
+  if(transDir===1&&transProgress<1) transProgress=Math.min(1,transProgress+0.022);
+  if(transDir===-1&&transProgress>0) transProgress=Math.max(0,transProgress-0.022);
+  const tp=easeInOut(transProgress);
+  const strataOp=1-tp;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0e0c09';ctx.fillRect(0,0,W,H);
+
+  // ── STRATA ELEMENTS ────────────────────────────────────────────────
+  if(strataOp>0.01){
+    // Vertical axis
+    ctx.beginPath();ctx.moveTo(L_PAD-2,TOP_PAD-12);ctx.lineTo(L_PAD-2,H-BOT_PAD+10);
+    ctx.strokeStyle=`rgba(138,176,190,${0.30*strataOp})`;ctx.lineWidth=0.6;ctx.stroke();
+
+    DAYS.forEach(d=>{
+      const grp=dayGroups[d];
+      const nLines=grp[0].nSubLines;
+      for(let sl=0;sl<nLines;sl++){
+        const subOffset=(sl-(nLines-1)/2)*SUB_LINE_OFFSET;
+        const y=DAY_Y[d]+subOffset;
+        ctx.beginPath();ctx.moveTo(L_PAD-2,y);ctx.lineTo(W-R_PAD,y);
+        ctx.strokeStyle=`rgba(138,176,190,${(sl===0?0.14:0.05)*strataOp})`;
+        ctx.lineWidth=0.5;ctx.stroke();
+      }
+    });
+
+    // Zone tints
+    const lgL=ctx.createLinearGradient(L_PAD,0,L_PAD+W*0.22,0);
+    lgL.addColorStop(0,`rgba(138,138,170,${0.035*strataOp})`);lgL.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=lgL;ctx.fillRect(L_PAD,TOP_PAD,W*0.22,H-TOP_PAD-BOT_PAD);
+    const lgR=ctx.createLinearGradient(W-W*0.20,0,W,0);
+    lgR.addColorStop(0,'rgba(0,0,0,0)');lgR.addColorStop(1,`rgba(196,154,58,${0.025*strataOp})`);
+    ctx.fillStyle=lgR;ctx.fillRect(W-W*0.20,TOP_PAD,W*0.20,H-TOP_PAD-BOT_PAD);
+
+    axisLeft.style.opacity=strataOp;axisRight.style.opacity=strataOp;axisLine.style.opacity=strataOp;
+
+    // Archetype labels in strata
+    ARCHETYPES.forEach(a=>{
+      const [r,g,b]=a.col;
+      a.el.style.opacity=strataOp;
+      a.el.style.color=`rgba(${r},${g},${b},${0.72*strataOp})`;
+    });
+
+    // Draw glyph watermarks in strata — small, very faint, near archetype labels
+    ARCHETYPES.forEach(a=>{
+      const cl=CLUSTERS.find(c=>c.id===a.id);
+      const [r,g,b]=a.col;
+      const hexCol=colToHex([r,g,b]);
+      // We'll draw the glyph SVG onto an off-screen image — skip for perf, just show label
+    });
+  } else {
+    axisLeft.style.opacity=0;axisRight.style.opacity=0;axisLine.style.opacity=0;
+    ARCHETYPES.forEach(a=>{a.el.style.opacity=0;});
+  }
+
+  // ── RESONANCE ELEMENTS ─────────────────────────────────────────────
+  if(tp>0.01){
+    CLUSTERS.forEach(cl=>{
+      const [r,g,b]=cl.col;
+      const isHov=hovNode>=0&&primaryCluster(EVENTS[hovNode].tags)===cl.id;
+      const boost=isHov?2.5:1;
+      [[1.40,0.04],[1.05,0.12],[0.68,0.08],[0.38,0.06]].forEach(([rf,op])=>{
+        ctx.beginPath();ctx.arc(cl.cx,cl.cy,cl.r*rf,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(${r},${g},${b},${op*tp*boost})`;
+        ctx.lineWidth=rf>1?0.5:0.7;ctx.stroke();
+      });
+      const [cr,cg,cb]=cl.col;
+      cl.nameEl.style.color=isHov
+        ?`rgba(${cr},${cg},${cb},${0.95*tp})`
+        :`rgba(${cr},${cg},${cb},${0.72*tp})`;
+    });
+  } else {
+    CLUSTERS.forEach(cl=>{cl.nameEl.style.color='rgba(0,0,0,0)';});
+  }
+
+  // ── NODE POSITIONS ─────────────────────────────────────────────────
+  EVENTS.forEach((e,i)=>{
+    const dX=e.uncertain
+      ?Math.cos(tick*e.driftSpeed+e.driftPhase)*e.driftRadius
+      :Math.cos(tick*e.driftSpeed+e.driftPhase)*e.driftRadius*0.4;
+    const dY=e.uncertain
+      ?Math.sin(tick*e.driftSpeed*0.7+e.driftPhase)*e.driftRadius
+      :Math.sin(tick*e.driftSpeed*0.7+e.driftPhase)*e.driftRadius*0.4;
+    e.cx=e.strataX*(1-tp)+(e.resX+dX*tp)*tp+(e.resX)*(1-tp)*tp;
+    // simpler lerp:
+    e.cx=e.strataX+(e.resX+dX-e.strataX)*tp;
+    e.cy=e.strataY+(e.resY+dY-e.strataY)*tp;
+  });
+
+  // ── GLOW ───────────────────────────────────────────────────────────
+  EVENTS.forEach((e,i)=>{
+    if(!e.glow)e.glow=0;
+    let tgt=hovNode===i?1:hovNode>=0?Math.max(0,tagSim(e.tags,EVENTS[hovNode].tags)*0.75-0.1):0;
+    e.glow+=(tgt-e.glow)*0.10;
+  });
+  EDGES.forEach(ep=>{
+    if(!ep.glow)ep.glow=0;
+    let tgt=0;
+    if(hovNode===ep.a||hovNode===ep.b)tgt=1;
+    else if(hovNode>=0){
+      const linked=EDGES.some(o=>(o.a===hovNode||o.b===hovNode)&&(o.a===ep.a||o.b===ep.a||o.a===ep.b||o.b===ep.b));
+      if(linked)tgt=0.30;
+    }
+    ep.glow+=(tgt-ep.glow)*0.09;
+  });
+
+  // ── EDGES ──────────────────────────────────────────────────────────
+  EDGES.forEach(ep=>{
+    const ea=EVENTS[ep.a],eb=EVENTS[ep.b];
+    const gl=ep.glow;
+    const acl=ea.resCluster||CLUSTERS[0],bcl=eb.resCluster||CLUSTERS[0];
+    const [ar,ag,ab]=acl.col,[br,bg,bb]=bcl.col;
+    const mr=(ar+br)/2,mg=(ag+bg)/2,mb=(ab+bb)/2;
+    const sc2=Math.pow(ep.s,0.6);
+    const baseOp=0.04+sc2*0.38;
+    const lineW=0.3+ep.s*1.1+gl*1.5;
+
+    if(tp<0.5){
+      const op=(baseOp+gl*0.52)*(1-tp*1.4);
+      if(op<0.003)return;
+      const ax=ea.cx,ay=ea.cy,bx=eb.cx,by=eb.cy;
+      const mx=(ax+bx)/2+ep.strataCpX,my=(ay+by)/2+ep.strataCpY;
+      const drift=Math.sin(tick*0.4+ep.a*0.3)*4;
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.quadraticCurveTo(mx+drift,my,bx,by);
+      ctx.strokeStyle=`rgba(${mr},${mg},${mb},${Math.min(0.92,op)})`;ctx.lineWidth=lineW;ctx.stroke();
+      if(ep.s>0.3||gl>0.15){
+        ctx.beginPath();ctx.moveTo(ax,ay);ctx.quadraticCurveTo(mx+drift+ep.strataCpY*0.3,my+ep.strataCpX*0.2,bx,by);
+        ctx.strokeStyle=`rgba(${mr},${mg},${mb},${op*0.18})`;ctx.lineWidth=0.3;ctx.stroke();
+      }
+    } else {
+      const resT=(tp-0.5)*2;
+      const op=Math.min(0.95,(baseOp+gl*0.62)*resT);
+      if(op<0.003)return;
+      const ax=ea.cx,ay=ea.cy,bx=eb.cx,by=eb.cy;
+      const mx=(ax+bx)/2,my=(ay+by)/2;
+      const dT=tick*0.35;
+      const cp1x=mx+ep.resCp1x+Math.sin(dT+ep.a*0.5)*10;
+      const cp1y=my+ep.resCp1y+Math.cos(dT+ep.b*0.4)*8;
+      const cp2x=mx+ep.resCp2x+Math.cos(dT*0.7+ep.a*0.6)*8;
+      const cp2y=my+ep.resCp2y+Math.sin(dT*0.8+ep.b*0.5)*10;
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,bx,by);
+      ctx.strokeStyle=`rgba(${mr},${mg},${mb},${op})`;ctx.lineWidth=lineW;ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ax,ay);
+      ctx.bezierCurveTo(cp1x+ep.ghostOff1,cp1y+ep.ghostOff2*0.5,cp2x-ep.ghostOff2,cp2y+ep.ghostOff1*0.5,bx,by);
+      ctx.strokeStyle=`rgba(${mr},${mg},${mb},${op*0.14})`;ctx.lineWidth=0.3;ctx.stroke();
+    }
+  });
+
+  // ── NODES ──────────────────────────────────────────────────────────
+  const isHov=hovNode>=0;
+  EVENTS.forEach((e,i)=>{
+    const gl=e.glow||0;
+    const pulse=0.75+Math.sin(tick*0.85+i*1.1)*0.25;
+    const cl=e.resCluster||CLUSTERS[0];
+    const [cr,cg,cb]=cl.col;
+    const connCount=EDGES.filter(ep=>ep.a===i||ep.b===i).length;
+    const isGold=connCount>=6,isDream=e.tags.includes('dream');
+    const [nr,ng,nb]=isGold?GOLD:isDream?VIOLET:[cr,cg,cb];
+    const nodeR=1.2+connCount*0.06+gl*1.8+(isGold?0.5:0);
+
+    if(gl>0.05){
+      const hl=ctx.createRadialGradient(e.cx,e.cy,0,e.cx,e.cy,10+gl*12);
+      hl.addColorStop(0,`rgba(${nr},${ng},${nb},${gl*0.22})`);
+      hl.addColorStop(1,`rgba(${nr},${ng},${nb},0)`);
+      ctx.beginPath();ctx.arc(e.cx,e.cy,10+gl*12,0,Math.PI*2);ctx.fillStyle=hl;ctx.fill();
+    }
+
+    if(tp>0.3&&e.uncertain){
+      for(let t2=5;t2>0;t2--){
+        const ta=tick-t2*0.08;
+        const tx=e.resX+Math.cos(ta*e.driftSpeed+e.driftPhase)*e.driftRadius*tp;
+        const ty=e.resY+Math.sin(ta*e.driftSpeed*0.7+e.driftPhase)*e.driftRadius*tp;
+        ctx.beginPath();ctx.arc(tx,ty,0.7,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${nr},${ng},${nb},${0.05*(1-t2/5)*tp})`;ctx.fill();
+      }
+    }
+
+    const ag2=ctx.createRadialGradient(e.cx,e.cy,0,e.cx,e.cy,4);
+    ag2.addColorStop(0,`rgba(${nr},${ng},${nb},${0.10*pulse})`);ag2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.arc(e.cx,e.cy,4,0,Math.PI*2);ctx.fillStyle=ag2;ctx.fill();
+
+    ctx.beginPath();ctx.arc(e.cx,e.cy,nodeR,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${nr},${ng},${nb},${0.55+gl*0.45})`;ctx.fill();
+
+    if(e.labelEl){
+      e.labelEl.style.left=e.cx+'px';e.labelEl.style.top=e.cy+'px';
+      let labelOp=0;
+      if(hovNode===i) labelOp=1;
+      else if(isHov&&gl>0.1) labelOp=1;
+      else if(!isHov&&connCount>=7) labelOp=0.22;
+      e.labelEl.style.color=`rgba(228,232,228,${labelOp})`;
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

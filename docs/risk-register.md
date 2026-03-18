@@ -1,0 +1,150 @@
+# Risk Register
+
+> Tracked assumptions, risks, and their mitigations.
+> Format: RSK-NNN entries.
+
+---
+
+**RSK-001:** Embedding quality insufficient for meaningful clustering
+**Date:** 2026-03-18
+**Severity:** High
+**Likelihood:** Medium
+
+**Risk:**
+OpenAI text-embedding-3-small may not produce clusters that feel "surprising and true" on short, informal Telegram messages. The quality of constellation formation is the entire user experience — if events cluster in ways that feel arbitrary or overly broad, the tool fails its core promise.
+
+**Mitigation:**
+1. Test embedding quality early (Sprint 1) with real messages from the team before building the full pipeline.
+2. JOIN_SIM threshold tuning session with real data — the 0.65 value from the prototype was calibrated for tag-based Jaccard, not cosine similarity over embeddings.
+3. Fallback: Cohere embed-multilingual-v3 if OpenAI produces poor results.
+4. Longer-term fallback: local sentence-transformers with fine-tuning on the team's actual data.
+
+**Owner:** Steven
+**Related:** DEC-003, DEC-011
+
+---
+
+**RSK-002:** Myth generation quality — fable risk
+**Date:** 2026-03-18
+**Severity:** High
+**Likelihood:** Medium
+
+**Risk:**
+Claude's mythic sentence output may default to therapy-speak, generic wisdom, or explicit moral statements (fable) rather than the ancestral, felt, non-extractable register the project requires. The Project Bible's critical distinction: "if you can read it and immediately extract one clean propositional truth, it's probably a fable." The current prototype prompt works reasonably well but sometimes produces generic outputs.
+
+**Mitigation:**
+1. Prompt engineering sprint with Emma (who owns the tonal register) before launch.
+2. Banned word list enforced in the prompt: journey, growth, explore, reflect, transformation (unless earned), powerful, detect, discover, reveal, activate, unlock.
+3. A/B testing: generate 3 myth candidates per cluster, let the team select the best. Use selections to refine the prompt.
+4. The embarrassment test from the Project Bible: "A good truth could not have been generated without this person's data." Apply as a quality gate.
+
+**Owner:** Emma (tone), Steven (implementation)
+**Related:** DEC-010
+
+---
+
+**RSK-003:** The habit loop problem — no day-2 retention mechanism
+**Date:** 2026-03-18
+**Severity:** High
+**Likelihood:** High
+
+**Risk:**
+There is no clear answer to "what makes someone come back on day 2." The tool requires sustained input over time to produce meaningful constellations. A single day's entries are too sparse for the system to surface surprising patterns. If users don't develop a regular practice of sending events to the Telegram bot, the pool stays shallow and the tool fails to demonstrate its value.
+
+**Mitigation:**
+1. The MVP is for three committed collaborators who are already philosophically invested. The habit loop problem is less acute for v1 than for public launch.
+2. Design a "first session" experience that produces at least one constellation and one mythic sentence from initial data — seed the pool with the team's existing Granola transcript so it's not empty on first visit.
+3. The Telegram bot could send a daily prompt (drawn from the recording protocol prompts in the Project Bible: "What moment today felt strange or out of place?") — but only if the team wants it. Notification fatigue is a risk.
+4. Defer the full habit-loop design to post-MVP. For now, rely on the team's intrinsic motivation and the Edge City context (dense shared experience creates natural input).
+
+**Owner:** All three
+**Related:** DEC-006, DEC-007
+
+---
+
+**RSK-004:** Frontend rebuild scope creep
+**Date:** 2026-03-18
+**Severity:** Medium
+**Likelihood:** High
+
+**Risk:**
+The current prototype (sasa_zamani_v3.html) is ~1100 lines of tightly coupled canvas code with mocked data. Replacing the data layer (from hardcoded JS objects to API calls) while preserving both views, the animated transition, the panel system, and the archetype glyphs is a non-trivial refactor. Scope creep risk: "while I'm in here, I might as well also fix/add X."
+
+**Mitigation:**
+1. Define a strict scope for the frontend refactor in Sprint 1: replace data source, preserve existing interactions, add collective toggle. Nothing else.
+2. Visual polish, new features, and the design brief's aesthetic refinements (grain overlay, Cormorant Garamond, etc.) are Sprint 2+.
+3. The strata and resonance views already work. Don't rewrite them — adapt them.
+
+**Owner:** Steven
+**Related:** DEC-005, DEC-009
+
+---
+
+**RSK-005:** API key exposure
+**Date:** 2026-03-18
+**Severity:** Medium
+**Likelihood:** Low (if handled correctly)
+
+**Risk:**
+The current prototype calls the Claude API directly from the browser with a visible API key. The deployed v1 must not expose OpenAI, Anthropic, or Telegram bot tokens to the client.
+
+**Mitigation:**
+1. All API calls (embedding, myth generation, Telegram webhook) go through the FastAPI backend. Environment variables on Railway hold the keys. The frontend never touches an API key.
+2. Standard practice — low risk if followed from Sprint 1.
+
+**Owner:** Steven
+**Related:** DEC-001, DEC-004
+
+---
+
+**RSK-006:** Granola transcript parsing fragility
+**Date:** 2026-03-18
+**Severity:** Low
+**Likelihood:** Medium
+
+**Risk:**
+The Granola transcript format (plain text with "Speaker A/B/C:" labels) may change between versions, or different export formats may produce different structures. The parser could break silently, producing misattributed or malformed events.
+
+**Mitigation:**
+1. Build the parser to handle the known format and fail loudly on unexpected input.
+2. Add a manual review step: after upload, show the parsed events to the user for confirmation before they enter the pool.
+3. Map speaker labels to participant names at upload time (user selects: "Speaker A = Emma, Speaker B = Jessie, Speaker C = Steven").
+
+**Owner:** Steven
+**Related:** DEC-006
+
+---
+
+**RSK-007:** Philosophical coherence under implementation pressure
+**Date:** 2026-03-18
+**Severity:** Medium
+**Likelihood:** Medium
+
+**Risk:**
+The project has an unusually strong philosophical foundation (Mbiti, Campbell, Deutsch, Popper, the myth-vs-fable distinction, decay as delivery mechanism). Under MVP time pressure, implementation shortcuts may violate philosophical principles — e.g., adding a chronological list view "for convenience," using the word "discover" in UI copy, generating fables instead of myths, treating the pool as a dashboard rather than a river.
+
+**Mitigation:**
+1. The Design Brief (§07 "What to Avoid") and the Project Bible (§11 "Language & Branding" and §12 "What We're Not") are explicit guardrails. Reference them in sprint reviews.
+2. Emma is the tonal guardrail. No UI copy or Claude prompt ships without her review.
+3. The single test from the Design Brief: "Does it feel like the diagram of something that can't quite be diagrammed?"
+
+**Owner:** Emma (tone/philosophy), Steven (implementation discipline)
+**Related:** DEC-010, DEC-009
+
+---
+
+**RSK-008:** Three-person team with no redundancy
+**Date:** 2026-03-18
+**Severity:** Low
+**Likelihood:** Low
+
+**Risk:**
+Steven is the sole developer. If Steven is unavailable, development stops. Jessie and Emma contribute design, copy, and thematic guidance but cannot implement.
+
+**Mitigation:**
+1. The two-Claude architecture (DEC-008) and well-documented canon documents mean a new developer could onboard from the docs.
+2. For MVP, this is an accepted risk. The team is small and committed.
+3. Jessie has demonstrated ability to work with Claude on prototype iterations — she could potentially handle frontend refinements with Claude Code guidance if needed.
+
+**Owner:** Steven
+**Related:** DEC-008
