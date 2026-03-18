@@ -66,8 +66,8 @@ None
   "session": "4a",
   "verdict": "COMPLETE",
   "tests": {
-    "before": 35,
-    "after": 50,
+    "before": 47,
+    "after": 62,
     "new": 15,
     "all_pass": true
   },
