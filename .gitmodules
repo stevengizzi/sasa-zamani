@@ -1,0 +1,3 @@
+[submodule ".claude/workflow"]
+	path = .claude/workflow
+	url = https://github.com/stevengizzi/claude-workflow.git
