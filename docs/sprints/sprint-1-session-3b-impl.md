@@ -17,7 +17,7 @@ Implement cluster assignment via cosine similarity, compute seed cluster centroi
 
 ## Requirements
 
-1. Create `app/clustering.py`:
+1. **Implement `app/clustering.py`** — the file exists as a docstring-only stub. Replace its contents with:
    - `cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float`:
      - Pure math, no external dependencies
      - Returns value between -1 and 1
@@ -25,16 +25,12 @@ Implement cluster assignment via cosine similarity, compute seed cluster centroi
      - Takes an event embedding and a list of (cluster_id, centroid_embedding) pairs
      - Returns (best_cluster_id, similarity_score)
      - If best similarity is below `settings.cluster_join_threshold`, log a warning but still return the best match
-   - `SEED_ARCHETYPES` — dictionary mapping archetype names to representative text:
+   - `SEED_ARCHETYPES` — **use the data from `scripts/seed_clusters.py`** as the authoritative source. That file already defines all 6 archetypes with representative text, glyph_id, and tags. Either import from it or copy the data, but preserve the glyph_id and representative_text fields exactly. The representative text in the script uses evocative sentences (better for embedding quality) rather than keywords:
      ```python
-     SEED_ARCHETYPES = {
-         "The Gate": "dreams, thresholds, migration, crossing over, departure, arrival, passage between worlds",
-         "What the Body Keeps": "the body remembers, water, morning ritual, physical sensation, embodied knowing, waking",
-         "The Table": "food, cooking together, shared meals, gathering, nourishment, communion, breaking bread",
-         "The Silence": "silence, solitude, withdrawal, absence, what is not said, the space between words",
-         "The Root": "memory, family, ancestry, mother tongue, language of origin, where you come from, inheritance",
-         "The Hand": "writing, fieldwork, making by hand, the craft of inscription, putting pen to paper, manual labor",
-     }
+     # From scripts/seed_clusters.py — DO NOT use simplified keyword versions
+     # Example: "A dream about crossing a threshold. The door that appears when you are
+     #           ready to leave. Migration, departure, the moment before."
+     # NOT: "dreams, thresholds, migration, crossing over, departure, arrival"
      ```
    - `compute_seed_centroids() -> dict[str, list[float]]`:
      - Embeds each archetype's representative text using `embed_text()` or `embed_texts()`
@@ -70,7 +66,7 @@ Implement cluster assignment via cosine similarity, compute seed cluster centroi
 - Do NOT modify: `app/main.py` (no new endpoints in this session)
 - Do NOT create: dynamic cluster creation, splitting, or merging logic
 - Do NOT recompute centroids after events are assigned — centroids are static seed values
-- The representative text for each archetype is defined exactly as listed above — do not embellish or modify it without discussion
+- The representative text for each archetype is defined in `scripts/seed_clusters.py` — use that as the source of truth, not the simplified keyword versions originally in this prompt
 
 ## Test Targets
 After implementation:

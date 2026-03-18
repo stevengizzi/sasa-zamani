@@ -15,19 +15,21 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/__init__.py`, `app/main.py`, `app/config.py`, `requirements.txt`, `.env.example`, `Procfile`, `tests/__init__.py`, `tests/conftest.py`, `tests/test_health.py` | Nothing (greenfield) | N/A | false |
+| `app/config.py`, `tests/conftest.py`, `tests/test_health.py` | `app/main.py` (add settings import, update /health), `requirements.txt` (add pydantic-settings, pytest, httpx) | N/A | false |
+
+**Existing scaffold (verified, not recreated):** `app/__init__.py`, `app/main.py` (stub endpoints preserved), `requirements.txt` (base deps present), `.env.example`, `Procfile`, `tests/__init__.py`
 
 **Compaction Risk:**
 
 | Factor | Count | Points |
 |--------|-------|--------|
-| New files created | 9 | 18 |
-| Files modified | 0 | 0 |
+| New files created | 3 | 6 |
+| Files modified | 2 | 4 |
 | Pre-flight reads | 2 (CLAUDE.md, docs/architecture.md) | 2 |
 | New tests | ~5 | 2.5 |
-| **Raw Total** | | **22.5** |
+| **Raw Total** | | **14.5** |
 
-**Adjusted score: ~13 (Medium).** Four of the nine files are trivially small: two empty `__init__.py`, a `.env.example` template, and a one-line `Procfile`. The substantive files are `main.py`, `config.py`, `requirements.txt`, `conftest.py`, and `test_health.py`. Cognitive load is equivalent to creating ~5 files.
+**Adjusted score: ~13 (Medium).** Reduced from original estimate because most scaffold files already exist. The substantive new work is `config.py`, `conftest.py`, and `test_health.py`, plus wiring settings into the existing `main.py`.
 
 **Acceptance criteria:**
 - `GET /health` returns `{"status": "healthy"}` (DB check comes in Session 2a)
@@ -44,7 +46,7 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/db.py`, `tests/test_db.py` | `app/config.py` (DB settings), `requirements.txt` (supabase-py) | Session 1's config.py | false |
+| `app/db.py` (implements stub), `tests/test_db.py` | `app/main.py` (update /health with DB check, add startup schema call) | Session 1's config.py | false |
 
 **Compaction Risk:**
 
@@ -72,7 +74,7 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/models.py`, `tests/test_endpoints.py` | `app/main.py` (add GET routes) | Session 2a's db.py | false |
+| `app/models.py` (implements stub), `tests/test_endpoints.py` | `app/main.py` (wire GET /events and /clusters to db) | Session 2a's db.py | false |
 
 **Compaction Risk:**
 
@@ -101,7 +103,7 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/embedding.py`, `tests/test_embedding.py` | `app/config.py` (OpenAI key), `requirements.txt` (openai) | Session 1's config.py | false |
+| `app/embedding.py` (implements stub), `tests/test_embedding.py` | (verify config.py and requirements.txt — deps already present) | Session 1's config.py | false |
 
 **Compaction Risk:**
 
@@ -132,7 +134,7 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/clustering.py`, `tests/test_clustering.py` | `app/db.py` (seed cluster functions) | Session 3a's embedding.py, Session 2a's db.py | false |
+| `app/clustering.py` (implements stub), `tests/test_clustering.py` | `app/db.py` (add cluster_exists for idempotent seeding) | Session 3a's embedding.py, Session 2a's db.py | false |
 
 **Compaction Risk:**
 
@@ -172,7 +174,7 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/telegram.py`, `tests/test_telegram.py` | `app/main.py` (add POST /telegram route) | Sessions 2a/2b (db.py, models.py), 3a/3b (embedding.py, clustering.py) | false |
+| `app/telegram.py` (implements stub), `tests/test_telegram.py` | `app/main.py` (wire POST /telegram stub to pipeline, add seed startup) | Sessions 2a/2b (db.py, models.py), 3a/3b (embedding.py, clustering.py) | false |
 
 **Compaction Risk:**
 
@@ -206,7 +208,7 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 | Creates | Modifies | Integrates | Parallelizable |
 |---------|----------|------------|----------------|
-| `app/granola.py`, `tests/test_granola.py`, `tests/test_integration.py` | `app/main.py` (add POST /granola route) | Same pipeline as 4a (db, models, embedding, clustering) | false |
+| `app/granola.py` (implements stub), `tests/test_granola.py`, `tests/test_integration.py` | `app/main.py` (wire POST /granola stub to pipeline) | Same pipeline as 4a (db, models, embedding, clustering) | false |
 
 **Compaction Risk:**
 

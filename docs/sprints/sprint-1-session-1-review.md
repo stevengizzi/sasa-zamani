@@ -32,5 +32,7 @@ docs/sprints/sprint-1/session-1-closeout.md
 1. Verify Pydantic Settings class has all five config fields with correct types and defaults
 2. Verify .env.example lists all required vars
 3. Verify health endpoint response format: {"status": "healthy"}
-4. Verify conftest.py mocks env vars so tests don't require real API keys
-5. Verify no database or external API code leaked into this session
+4. Verify GET / still serves the frontend (FileResponse preserved from scaffold)
+5. Verify conftest.py mocks env vars so tests don't require real API keys
+6. Verify no database or external API code leaked into this session
+7. Verify existing stub endpoints were preserved in main.py (not removed)

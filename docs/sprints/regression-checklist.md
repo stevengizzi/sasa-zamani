@@ -1,6 +1,6 @@
 # Sprint 1: Regression Checklist
 
-Since this is Sprint 1 (greenfield), there is no existing functionality to regress. This checklist establishes the invariants that must hold after each session and at sprint close.
+Since this is Sprint 1, the existing codebase has only scaffold stubs (no implemented logic). This checklist establishes the invariants that must hold after each session and at sprint close.
 
 ## Invariants Established by This Sprint
 

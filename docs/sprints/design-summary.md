@@ -4,38 +4,45 @@
 
 **Session Breakdown:**
 
-- Session 1: Project scaffold, configuration system (env vars via Pydantic Settings), FastAPI app skeleton with health endpoint, deploy to Railway.
-  - Creates: `app/__init__.py`, `app/main.py`, `app/config.py`, `requirements.txt`, `.env.example`, `Procfile`, `tests/__init__.py`, `tests/conftest.py`, `tests/test_health.py`
-  - Modifies: Nothing (greenfield)
+- Session 1: Configuration system (env vars via Pydantic Settings), health endpoint enhancement, test infrastructure, deploy to Railway.
+  - Creates: `app/config.py`, `tests/conftest.py`, `tests/test_health.py`
+  - Modifies: `app/main.py` (add settings import, update /health), `requirements.txt` (add pydantic-settings, pytest, httpx), `.env.example` (add CLUSTER_JOIN_THRESHOLD)
+  - Existing (verified, not recreated): `app/__init__.py`, `Procfile`, `tests/__init__.py`, stub endpoints in `app/main.py`
   - Integrates: N/A (first session)
 
 - Session 2a: Supabase database connection, schema creation (events table with pgvector, clusters table), basic CRUD operations.
-  - Creates: `app/db.py`, `tests/test_db.py`
-  - Modifies: `app/config.py` (add DB settings), `requirements.txt` (add supabase-py)
+  - Implements: `app/db.py` (replaces docstring-only stub)
+  - Creates: `tests/test_db.py`
+  - Modifies: `app/main.py` (update /health with DB check, add startup schema call)
   - Integrates: Session 1's config.py
 
 - Session 2b: Pydantic request/response models, GET /events (with ?participant= filter), GET /clusters endpoints.
-  - Creates: `app/models.py`, `tests/test_endpoints.py`
+  - Implements: `app/models.py` (replaces docstring-only stub)
+  - Creates: `tests/test_endpoints.py`
   - Modifies: `app/main.py` (add GET routes)
   - Integrates: Session 2a's db.py
 
 - Session 3a: OpenAI embedding integration — embed_text() function, error handling, mock-friendly architecture for testing.
-  - Creates: `app/embedding.py`, `tests/test_embedding.py`
-  - Modifies: `app/config.py` (add OpenAI key), `requirements.txt` (add openai)
+  - Implements: `app/embedding.py` (replaces docstring-only stub)
+  - Creates: `tests/test_embedding.py`
+  - Modifies: (verify config.py has OPENAI_API_KEY — already present from Session 1)
   - Integrates: Session 1's config.py
 
 - Session 3b: Cluster assignment logic (cosine similarity against centroids, nearest-cluster assignment), seed cluster centroid computation from representative text, seed cluster insertion into DB.
-  - Creates: `app/clustering.py`, `tests/test_clustering.py`
+  - Implements: `app/clustering.py` (replaces docstring-only stub)
+  - Creates: `tests/test_clustering.py`
   - Modifies: `app/db.py` (seed cluster functions)
   - Integrates: Session 3a's embedding.py, Session 2a's db.py
 
 - Session 4a: Telegram webhook handler — validate payload, extract text + participant, run through embed → assign → store pipeline, idempotency via update_id.
-  - Creates: `app/telegram.py`, `tests/test_telegram.py`
+  - Implements: `app/telegram.py` (replaces docstring-only stub)
+  - Creates: `tests/test_telegram.py`
   - Modifies: `app/main.py` (add POST /telegram route)
   - Integrates: Sessions 2a/2b (db.py, models.py), 3a/3b (embedding.py, clustering.py)
 
 - Session 4b: Granola transcript parser — speaker attribution, segment extraction, batch embed → assign → store. End-to-end integration tests covering the full pipeline.
-  - Creates: `app/granola.py`, `tests/test_granola.py`, `tests/test_integration.py`
+  - Implements: `app/granola.py` (replaces docstring-only stub)
+  - Creates: `tests/test_granola.py`, `tests/test_integration.py`
   - Modifies: `app/main.py` (add POST /granola route)
   - Integrates: Same pipeline as 4a (db, models, embedding, clustering)
 
@@ -61,7 +68,7 @@
 - Cosine similarity assignment is correct: assigned cluster has highest similarity among all centroids
 
 **File Scope:**
-- Modify: Only files created within this sprint (greenfield)
+- Modify: Files within the `app/` and `tests/` directories (existing stubs are replaced with implementations)
 - Do not modify: `static/index.html` (the prototype frontend — untouched until Sprint 2), any docs/ files (doc-sync handles updates post-sprint)
 
 **Config Changes:**

@@ -20,11 +20,11 @@ Create the Supabase database client, establish the events and clusters tables wi
 1. Update `app/config.py`:
    - No new fields needed (SUPABASE_URL and SUPABASE_KEY already defined)
 
-2. Update `requirements.txt`:
-   - Add `supabase` (Python client)
-   - Add `vecs` or equivalent if needed for pgvector operations (evaluate whether supabase-py handles vector types natively — if not, use raw SQL via `supabase.rpc()` or `supabase.postgrest`)
+2. **Verify `requirements.txt`:**
+   - `supabase` is already listed. No changes needed unless `vecs` or equivalent is required for pgvector operations (evaluate whether supabase-py handles vector types natively — if not, use raw SQL via `supabase.rpc()` or `supabase.postgrest`)
 
-3. Create `app/db.py` — Supabase client module:
+3. **Implement `app/db.py`** — the file exists as a docstring-only stub. Replace its contents with the full Supabase client module:
+   - **Reference `scripts/init_supabase.sql`** for the canonical table schema — it includes additional columns (glyph_id, myth_text, myth_version, is_seed, event_date, xs, day) beyond the minimum listed below. Use the SQL script as the source of truth for column definitions.
    - `get_db()` function returning initialized Supabase client (singleton via settings)
    - `ensure_schema()` function that creates tables if they don't exist (idempotent):
      - Enable pgvector extension: `CREATE EXTENSION IF NOT EXISTS vector`

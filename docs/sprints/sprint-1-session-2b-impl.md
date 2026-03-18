@@ -16,7 +16,7 @@ Define Pydantic request/response models for all API data types and implement the
 
 ## Requirements
 
-1. Create `app/models.py` — Pydantic models:
+1. **Implement `app/models.py`** — the file exists as a docstring-only stub. Replace its contents with Pydantic models:
    - `EventResponse`: id (UUID), label (str), note (str | None), participant (str), cluster_id (UUID | None), created_at (datetime), source (str)
      - Note: does NOT include embedding field (too large for API response)
    - `ClusterResponse`: id (UUID), name (str), event_count (int)
@@ -25,7 +25,7 @@ Define Pydantic request/response models for all API data types and implement the
    - `ErrorResponse`: detail (str)
    - `GranolaRequest`: transcript (str) — for POST /granola (used in Session 4b, defined now for completeness)
 
-2. Update `app/main.py`:
+2. **Update `app/main.py`** — the stub endpoints for `/events` and `/clusters` already exist (returning empty lists). Wire them to the real database:
    - `GET /events` → calls `db.get_events(participant)`, returns `list[EventResponse]`
      - Optional query param: `participant: str | None = None`
      - Participant filter is case-insensitive (handle in db.py or endpoint)

@@ -20,7 +20,7 @@ Implement Granola transcript parsing with speaker attribution, the POST /granola
 
 ## Requirements
 
-1. Create `app/granola.py`:
+1. **Implement `app/granola.py`** — the file exists as a docstring-only stub. Replace its contents with:
    - `parse_transcript(transcript: str) -> list[dict]`:
      - Parses a Granola-format transcript into segments
      - Granola format: plain text with speaker labels like "Jessie: ...\n\nEmma: ..."
@@ -46,8 +46,7 @@ Implement Granola transcript parsing with speaker attribution, the POST /granola
      - On empty transcript: raises ValueError("Empty transcript")
      - On embedding failure for any segment: rolls back ALL events from this transcript (no partial upload)
 
-2. Update `app/main.py`:
-   - Add `POST /granola` endpoint:
+2. **Update `app/main.py`** — the `POST /granola` stub endpoint already exists (returns `{"status": "ok"}`). Replace its implementation to:
      - Accepts JSON body: `{"transcript": "..."}` (or use the GranolaRequest model from Session 2b)
      - Calls `process_granola_upload()`
      - Returns 200 with list of created events on success

@@ -113,4 +113,4 @@ Environment variables via Pydantic Settings (no YAML config files):
 - RSK-007: Philosophical coherence under implementation pressure — the seed archetype names and representative text must be chosen carefully. The Gate, The Silence, etc. are not arbitrary labels.
 
 ## Session Count Estimate
-7 sessions. Greenfield project requires creating all infrastructure from scratch. Sessions split to keep compaction risk manageable: scaffold (1), database (2a, 2b), embedding/clustering (3a, 3b), input handlers (4a, 4b). Strict sequential dependency chain.
+7 sessions. The repo has a bootstrapped scaffold (stub files, dependencies, SQL scripts) but no implemented logic. Sessions split to keep compaction risk manageable: scaffold + config (1), database (2a, 2b), embedding/clustering (3a, 3b), input handlers (4a, 4b). Strict sequential dependency chain.

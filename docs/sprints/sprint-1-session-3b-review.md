@@ -29,5 +29,5 @@ Read: docs/sprints/sprint-1/session-3b-closeout.md
 3. Verify assign_cluster returns nearest cluster even below threshold (logs, doesn't error)
 4. Verify seed_clusters is idempotent (check for cluster_exists guard)
 5. Verify centroid similarity matrix in close-out — check for degenerate cases (escalation #4, #5)
-6. Verify representative text matches the spec exactly (no modifications)
+6. Verify representative text matches `scripts/seed_clusters.py` (the authoritative source, not simplified keywords)
 7. Check that clustering.py imports embedding.py (not the other way around)

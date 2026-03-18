@@ -18,7 +18,7 @@ Implement the Telegram webhook receiver that validates incoming payloads, extrac
 
 ## Requirements
 
-1. Create `app/telegram.py`:
+1. **Implement `app/telegram.py`** — the file exists as a docstring-only stub. Replace its contents with:
    - `PARTICIPANT_MAP` — configurable mapping from Telegram username to participant name:
      ```python
      PARTICIPANT_MAP = {
@@ -45,8 +45,7 @@ Implement the Telegram webhook receiver that validates incoming payloads, extrac
      - On embedding failure: raise or return {"processed": False, "reason": "embedding_failed"}
      - On DB failure: raise or return {"processed": False, "reason": "db_failed"}
 
-2. Update `app/main.py`:
-   - Add `POST /telegram` endpoint:
+2. **Update `app/main.py`** — the `POST /telegram` stub endpoint already exists (returns `{"status": "ok"}`). Replace its implementation to:
      - Accepts raw JSON body (Telegram webhook format)
      - Calls `process_telegram_update()`
      - **Always returns 200** regardless of outcome (prevents Telegram retry storms)
@@ -56,9 +55,8 @@ Implement the Telegram webhook receiver that validates incoming payloads, extrac
        Note: The sprint spec says "503 on OpenAI failure" but for the Telegram webhook specifically, we must always return 200. Log the error server-side. If called directly (not from Telegram), 503 is appropriate — but distinguish this in Session 4b integration tests.
    - Ensure seed clusters are populated before the first event arrives (call seed_clusters on startup if not already seeded)
 
-3. Update `requirements.txt`:
-   - Add `python-telegram-bot` if needed for type definitions or utilities
-   - Or handle raw webhook payloads directly (simpler — Telegram sends plain JSON)
+3. **Verify `requirements.txt`:**
+   - `python-telegram-bot` is already listed. Decide whether to use it for type definitions/utilities or handle raw webhook payloads directly (simpler — Telegram sends plain JSON).
    - Document the choice in close-out
 
 4. Create `tests/test_telegram.py`:

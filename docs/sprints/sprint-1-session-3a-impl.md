@@ -21,10 +21,10 @@ Implement the `embed_text()` function using OpenAI's text-embedding-3-small mode
    - No new fields needed (OPENAI_API_KEY already defined in Session 1)
    - Verify the field exists — if Session 1 didn't add it, add it now
 
-2. Update `requirements.txt`:
-   - Add `openai` (Python SDK)
+2. **Verify `requirements.txt`:**
+   - `openai` is already listed. `numpy` is also available if needed for vector math. No changes expected.
 
-3. Create `app/embedding.py`:
+3. **Implement `app/embedding.py`** — the file exists as a docstring-only stub. Replace its contents with:
    - Define `EmbeddingError(Exception)` — typed exception for embedding failures
    - `embed_text(text: str) -> list[float]`:
      - Calls OpenAI `client.embeddings.create(model="text-embedding-3-small", input=text)`
