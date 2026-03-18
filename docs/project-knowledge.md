@@ -20,6 +20,8 @@ The core visualization is the Sasa Map: a canvas-based interface with two views 
 **Tests:** 0
 **Sprints completed:** 0
 **Active sprint:** None — bootstrapping complete, ready for Sprint 1
+**Production URL:** https://web-production-0aa47.up.railway.app
+**Database:** https://kngzaasfcbjccivuqbkt.supabase.co
 **Next sprint:** 1 (Backend Foundation + Data Pipeline)
 **Prototype:** sasa_zamani_v3.html exists with mocked data, two views, panel system, archetype glyphs, Claude API myth generation. Needs migration to real data.
 

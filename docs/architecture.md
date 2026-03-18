@@ -101,6 +101,7 @@ Managed Postgres with pgvector extension. Stores events with their embedding vec
 | Telegram | python-telegram-bot | Webhook mode |
 | Deployment | Railway | Auto-deploy from GitHub |
 | Version control | Git + GitHub | Two-Claude architecture bridge |
+| Production URL | https://web-production-0aa47.up.railway.app | Telegram webhook: /telegram |
 
 ## API Endpoints
 

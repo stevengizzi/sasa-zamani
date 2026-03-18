@@ -12,7 +12,7 @@
 - **Active sprint:** None
 - **Next sprint:** 1 (Backend Foundation + Data Pipeline)
 - **Tests:** 0
-- **Infrastructure:** Supabase project TBD, Railway app TBD, Telegram bot TBD
+- **Infrastructure:** Railway: web-production-0aa47.up.railway.app | Supabase: kngzaasfcbjccivuqbkt.supabase.co | Telegram bot: configured, webhook pending Sprint 1
 - **Prototype:** sasa_zamani_v3.html exists with mocked data — migration target
 
 ## What This Is
