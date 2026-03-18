@@ -1,7 +1,7 @@
 """Shared test fixtures for Sasa/Zamani test suite."""
 
-import os
 from collections.abc import AsyncIterator
+from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -26,8 +26,13 @@ async def client(mock_env_vars: None) -> AsyncIterator[AsyncClient]:
 
     from app.main import app
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    # Mock DB functions so tests don't need a real Supabase connection
+    with (
+        patch("app.main.ensure_schema"),
+        patch("app.main.check_connection", return_value=True),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
 
     get_settings.cache_clear()

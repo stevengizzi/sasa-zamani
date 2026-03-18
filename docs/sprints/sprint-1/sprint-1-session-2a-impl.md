@@ -15,6 +15,10 @@ Before making any changes:
 ## Objective
 Create the Supabase database client, establish the events and clusters tables with pgvector support, and implement basic CRUD operations. Update the health endpoint to report database connection status.
 
+## Housekeeping from Prior Sessions
+
+- **Remove unused `import os`** from `tests/conftest.py` (line 3). Flagged in Session 1 review as a lint issue. You'll be editing conftest.py for DB fixtures anyway — clean it up while you're there.
+
 ## Requirements
 
 1. Update `app/config.py`:

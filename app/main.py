@@ -10,14 +10,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.db import check_connection, ensure_schema
 
 load_dotenv()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Validate settings at startup to fail fast on missing env vars."""
+    """Validate settings and database schema at startup to fail fast."""
     get_settings()
+    ensure_schema()
     yield
 
 
@@ -74,4 +76,8 @@ async def generate_myth(request: Request) -> dict:
 @app.get("/health")
 async def health_check() -> dict:
     """Health check endpoint for Railway deployment monitoring."""
-    return {"status": "healthy"}
+    db_ok = check_connection()
+    return {
+        "status": "healthy" if db_ok else "degraded",
+        "database": "connected" if db_ok else "disconnected",
+    }

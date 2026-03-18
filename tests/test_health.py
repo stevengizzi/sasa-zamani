@@ -16,6 +16,7 @@ async def test_health_response_has_status_key(client):
     data = response.json()
     assert "status" in data
     assert data["status"] == "healthy"
+    assert data["database"] == "connected"
 
 
 async def test_frontend_returns_200(client):

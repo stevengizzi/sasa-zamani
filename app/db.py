@@ -1,1 +1,122 @@
 """Supabase client initialization and database queries."""
+
+from supabase import Client, create_client
+
+from app.config import get_settings
+
+_client: Client | None = None
+
+
+def get_db() -> Client:
+    """Return the Supabase client singleton."""
+    global _client
+    if _client is None:
+        settings = get_settings()
+        _client = create_client(settings.supabase_url, settings.supabase_key)
+    return _client
+
+
+def reset_client() -> None:
+    """Reset the client singleton (used by tests)."""
+    global _client
+    _client = None
+
+
+def ensure_schema() -> None:
+    """Verify database schema exists by probing tables. Idempotent.
+
+    The actual schema is created via scripts/init_supabase.sql (run in the
+    Supabase SQL editor or CLI).  This function validates the tables are
+    present at startup so the app fails fast with a clear message.
+    """
+    client = get_db()
+    for table in ("clusters", "events", "myths"):
+        client.table(table).select("id", count="exact").limit(0).execute()
+
+
+def check_connection() -> bool:
+    """Return True if the database is reachable, False otherwise."""
+    try:
+        client = get_db()
+        client.table("clusters").select("id", count="exact").limit(0).execute()
+        return True
+    except Exception:
+        return False
+
+
+def insert_event(
+    label: str,
+    note: str,
+    participant: str,
+    embedding: list[float],
+    source: str,
+    cluster_id: str | None = None,
+) -> dict:
+    """Insert a new event and return the inserted row."""
+    data: dict = {
+        "label": label,
+        "note": note,
+        "participant": participant,
+        "source": source,
+        "embedding": embedding,
+    }
+    if cluster_id is not None:
+        data["cluster_id"] = cluster_id
+    response = get_db().table("events").insert(data).execute()
+    return response.data[0]
+
+
+def get_events(participant: str | None = None) -> list[dict]:
+    """Return events without embedding field. Optionally filter by participant (case-insensitive)."""
+    query = get_db().table("events").select(
+        "id, created_at, event_date, label, note, participant, source, cluster_id, xs, day"
+    )
+    if participant is not None:
+        query = query.ilike("participant", participant)
+    return query.execute().data
+
+
+def get_clusters() -> list[dict]:
+    """Return clusters without centroid embedding."""
+    return (
+        get_db()
+        .table("clusters")
+        .select("id, name, glyph_id, myth_text, myth_version, event_count, last_updated, is_seed")
+        .execute()
+        .data
+    )
+
+
+def insert_cluster(
+    name: str,
+    centroid_embedding: list[float],
+    is_seed: bool = False,
+) -> dict:
+    """Insert a new cluster and return the inserted row."""
+    data = {
+        "name": name,
+        "centroid": centroid_embedding,
+        "is_seed": is_seed,
+    }
+    response = get_db().table("clusters").insert(data).execute()
+    return response.data[0]
+
+
+def get_cluster_centroids() -> list[tuple[str, list[float]]]:
+    """Return list of (cluster_id, centroid) tuples for cluster assignment."""
+    rows = get_db().table("clusters").select("id, centroid").execute().data
+    return [(row["id"], row["centroid"]) for row in rows]
+
+
+def increment_event_count(cluster_id: str) -> None:
+    """Increment event_count for a cluster by 1."""
+    client = get_db()
+    row = (
+        client.table("clusters")
+        .select("event_count")
+        .eq("id", cluster_id)
+        .single()
+        .execute()
+    )
+    new_count = row.data["event_count"] + 1
+    client.table("clusters").update({"event_count": new_count}).eq("id", cluster_id).execute()
