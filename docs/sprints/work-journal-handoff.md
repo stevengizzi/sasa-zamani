@@ -24,17 +24,23 @@ You are the Sprint Work Journal for Sprint 1 of Sasa/Zamani. Your job is to:
 
 **GitHub repo:** https://github.com/stevengizzi/sasa-zamani.git
 
+## Existing Scaffold
+
+The repo was bootstrapped before Sprint 1. All `app/` module files already exist as docstring-only stubs (no logic). `requirements.txt` has the full dependency set. `main.py` has stub endpoints for all routes returning empty responses. `.env.example`, `Procfile`, and `__init__.py` files are in place.
+
+This means sessions **implement** existing stubs rather than creating files from scratch. The key exception is `app/config.py` (genuinely new) and all `tests/` files (genuinely new). Additionally, `scripts/seed_clusters.py` already exists with the authoritative seed archetype data (representative text, glyph_id, tags) — Session 3b should use it as the source of truth.
+
 ## Session Breakdown
 
-| Session | Scope | Creates | Modifies | Score |
-|---------|-------|---------|----------|-------|
-| 1 | Project scaffold + Config + Health endpoint | main.py, config.py, requirements.txt, conftest.py, test_health.py, .env.example, Procfile, __init__.py ×2 | — | ~13 |
-| 2a | Database connection + Schema creation | db.py, test_db.py | config.py, requirements.txt | 13 |
-| 2b | Pydantic models + Read endpoints (GET /events, GET /clusters) | models.py, test_endpoints.py | main.py | 13 |
-| 3a | Embedding pipeline (OpenAI integration) | embedding.py, test_embedding.py | config.py, requirements.txt | 15 |
-| 3b | Cluster assignment + Seed cluster centroids | clustering.py, test_clustering.py | db.py | 13 |
-| 4a | Telegram webhook handler + pipeline wiring | telegram.py, test_telegram.py | main.py | 16 |
-| 4b | Granola parser + Integration tests | granola.py, test_granola.py, test_integration.py | main.py | 21 |
+| Session | Scope | Implements (stub → real) | Creates (new) | Modifies | Score |
+|---------|-------|--------------------------|---------------|----------|-------|
+| 1 | Config + Health endpoint | — | config.py, conftest.py, test_health.py | main.py, requirements.txt | ~13 |
+| 2a | Database connection + Schema | db.py | test_db.py | main.py | 13 |
+| 2b | Pydantic models + Read endpoints | models.py | test_endpoints.py | main.py | 13 |
+| 3a | Embedding pipeline (OpenAI) | embedding.py | test_embedding.py | — | 15 |
+| 3b | Cluster assignment + Seed centroids | clustering.py | test_clustering.py | db.py | 13 |
+| 4a | Telegram webhook + pipeline wiring | telegram.py | test_telegram.py | main.py | 16 |
+| 4b | Granola parser + Integration tests | granola.py | test_granola.py, test_integration.py | main.py | 21 |
 
 ## Session Dependency Chain
 
@@ -48,8 +54,10 @@ All sessions are strictly sequential. No parallelizable sessions.
 
 - `static/index.html` — prototype frontend, untouched until Sprint 2
 - Files under `docs/` — doc-sync handles updates post-sprint (exception: sprint report files under docs/sprints/sprint-1/)
+- Existing stub endpoints in main.py should not be removed — only the one being wired in that session gets modified
 
 Per-session constraints (files that session should NOT modify):
+- Session 1: Do not remove existing stub endpoints from main.py
 - Session 2b: app/db.py (call only)
 - Session 3a: app/db.py, app/models.py, app/main.py
 - Session 3b: app/embedding.py, app/main.py
