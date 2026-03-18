@@ -102,6 +102,19 @@ def insert_cluster(
     return response.data[0]
 
 
+def cluster_exists(name: str) -> bool:
+    """Return True if a cluster with the given name exists."""
+    response = (
+        get_db()
+        .table("clusters")
+        .select("id", count="exact")
+        .eq("name", name)
+        .limit(0)
+        .execute()
+    )
+    return response.count > 0
+
+
 def get_cluster_centroids() -> list[tuple[str, list[float]]]:
     """Return list of (cluster_id, centroid) tuples for cluster assignment."""
     rows = get_db().table("clusters").select("id, centroid").execute().data
