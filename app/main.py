@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.db import check_connection, ensure_schema, get_clusters, get_db, get_events
+from app.db import check_connection, ensure_schema, get_clusters, get_events
 from app.models import ClusterResponse, EventResponse, HealthResponse
 from app.granola import process_granola_upload
 from app.models import GranolaRequest
@@ -32,7 +32,7 @@ def _ensure_seed_clusters() -> None:
     """Seed clusters if not already present. Called once at startup."""
     from app.clustering import seed_clusters
 
-    seed_clusters(get_db())
+    seed_clusters()
 
 
 app = FastAPI(title="Sasa/Zamani", version="0.1.0", lifespan=lifespan)

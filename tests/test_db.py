@@ -66,6 +66,15 @@ async def test_ensure_schema_is_idempotent(mock_supabase):
     assert "myths" in table_calls
 
 
+async def test_ensure_schema_raises_on_missing_table(mock_supabase):
+    """ensure_schema wraps opaque errors with a clear message."""
+    chain = _chain(mock_supabase, "events").select.return_value.limit.return_value
+    chain.execute.side_effect = Exception("relation does not exist")
+
+    with pytest.raises(RuntimeError, match="init_supabase.sql"):
+        ensure_schema()
+
+
 # --- insert_event / get_events ---
 
 

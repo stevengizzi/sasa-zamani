@@ -31,7 +31,13 @@ def ensure_schema() -> None:
     """
     client = get_db()
     for table in ("clusters", "events", "myths"):
-        client.table(table).select("id", count="exact").limit(0).execute()
+        try:
+            client.table(table).select("id", count="exact").limit(0).execute()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Table '{table}' not found. Run scripts/init_supabase.sql in "
+                f"the Supabase SQL editor to create the schema."
+            ) from exc
 
 
 def check_connection() -> bool:

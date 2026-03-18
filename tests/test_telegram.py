@@ -91,6 +91,78 @@ def test_extract_message_no_message_field():
     assert extract_message(update) is None
 
 
+def test_extract_message_emma_by_username():
+    PARTICIPANT_MAP.update({"emma_murf": "emma"})
+    update = _make_update(username="emma_murf")
+    result = extract_message(update)
+    assert result is not None
+    assert result[1] == "emma"
+
+
+def test_extract_message_jessie_by_full_name():
+    PARTICIPANT_MAP.update({"Jessie Lian": "jessie"})
+    update = {
+        "update_id": 200,
+        "message": {
+            "message_id": 42,
+            "from": {"id": 100, "is_bot": False, "first_name": "Jessie", "last_name": "Lian"},
+            "chat": {"id": 100, "type": "private"},
+            "text": "hello",
+        },
+    }
+    result = extract_message(update)
+    assert result is not None
+    assert result[1] == "jessie"
+
+
+def test_extract_message_steven_by_full_name():
+    PARTICIPANT_MAP.update({"Steven Gizzi": "steven"})
+    update = {
+        "update_id": 201,
+        "message": {
+            "message_id": 43,
+            "from": {"id": 101, "is_bot": False, "first_name": "Steven", "last_name": "Gizzi"},
+            "chat": {"id": 101, "type": "private"},
+            "text": "hello",
+        },
+    }
+    result = extract_message(update)
+    assert result is not None
+    assert result[1] == "steven"
+
+
+def test_extract_message_first_name_fallback():
+    PARTICIPANT_MAP.update({"Jessie": "jessie"})
+    update = {
+        "update_id": 202,
+        "message": {
+            "message_id": 44,
+            "from": {"id": 100, "is_bot": False, "first_name": "Jessie"},
+            "chat": {"id": 100, "type": "private"},
+            "text": "hello",
+        },
+    }
+    result = extract_message(update)
+    assert result is not None
+    assert result[1] == "jessie"
+
+
+def test_extract_message_username_takes_precedence():
+    PARTICIPANT_MAP.update({"emma_murf": "emma", "Emma Murphy": "emma"})
+    update = {
+        "update_id": 203,
+        "message": {
+            "message_id": 45,
+            "from": {"id": 102, "is_bot": False, "username": "emma_murf", "first_name": "Emma", "last_name": "Murphy"},
+            "chat": {"id": 102, "type": "private"},
+            "text": "hello",
+        },
+    }
+    result = extract_message(update)
+    assert result is not None
+    assert result[1] == "emma"
+
+
 # --- is_duplicate ---
 
 

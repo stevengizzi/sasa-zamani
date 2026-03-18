@@ -9,8 +9,16 @@ from app.embedding import EmbeddingError, embed_text
 logger = logging.getLogger(__name__)
 
 PARTICIPANT_MAP: dict[str, str] = {
-    # Populated from config or hardcoded for v1:
-    # "telegram_username": "participant_name"
+    # By Telegram username (without @)
+    "emma_murf": "emma",
+    # By full name (first_name + last_name from Telegram)
+    "Jessie Lian": "jessie",
+    "Steven Gizzi": "steven",
+    "Emma Murphy": "emma",
+    # By first_name alone (fallback)
+    "Jessie": "jessie",
+    "Steven": "steven",
+    "Emma": "emma",
 }
 
 _processed_update_ids: set[int] = set()
@@ -45,7 +53,14 @@ def extract_message(update: dict) -> tuple[str, str, int] | None:
 
     from_user = message.get("from", {})
     username = from_user.get("username", "")
-    participant = PARTICIPANT_MAP.get(username, "unknown")
+    first_name = from_user.get("first_name", "")
+    last_name = from_user.get("last_name", "")
+    full_name = f"{first_name} {last_name}".strip()
+    participant = (
+        PARTICIPANT_MAP.get(username)
+        or PARTICIPANT_MAP.get(full_name)
+        or PARTICIPANT_MAP.get(first_name, "unknown")
+    )
 
     return text, participant, update_id
 

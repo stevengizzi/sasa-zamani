@@ -128,7 +128,7 @@ def compute_seed_centroids() -> dict[str, list[float]]:
     }
 
 
-def seed_clusters(db_client) -> None:
+def seed_clusters() -> None:
     """Insert the six seed clusters into the database. Idempotent — skips existing clusters."""
     from app.db import cluster_exists, insert_cluster
 
