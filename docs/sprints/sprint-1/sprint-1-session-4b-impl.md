@@ -18,6 +18,10 @@ Before making any changes:
 ## Objective
 Implement Granola transcript parsing with speaker attribution, the POST /granola endpoint wired to the embed → assign → store pipeline, and comprehensive end-to-end integration tests covering both input modalities.
 
+## Housekeeping from Prior Sessions
+
+- **Pin pytest-asyncio in `requirements.txt`.** It's installed and used by the async test fixtures but was never added to the dependency list. Add `pytest-asyncio` (match the installed version via `pip show pytest-asyncio`) alongside the existing test deps (pytest, httpx). This resolves a reproducibility gap flagged since Session 1.
+
 ## Requirements
 
 1. **Implement `app/granola.py`** — the file exists as a docstring-only stub. Replace its contents with:

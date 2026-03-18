@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.db import check_connection, ensure_schema, get_clusters, get_db, get_events
 from app.models import ClusterResponse, EventResponse, HealthResponse
+from app.granola import process_granola_upload
+from app.models import GranolaRequest
 from app.telegram import process_telegram_update
 
 load_dotenv()
@@ -92,9 +94,33 @@ async def telegram_webhook(request: Request) -> dict:
 
 
 @app.post("/granola")
-async def granola_upload(request: Request) -> dict:
+async def granola_upload(request: Request):
     """Upload a Granola conversation transcript. Parses speaker turns, attributes participants, embeds, and stores."""
-    return {"status": "ok"}
+    import logging
+
+    from fastapi.responses import JSONResponse
+
+    granola_logger = logging.getLogger("app.granola")
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "invalid_json"})
+
+    try:
+        payload = GranolaRequest(**body)
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "missing_transcript_field"})
+
+    try:
+        results = process_granola_upload(payload.transcript)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    except Exception as exc:
+        granola_logger.error("Granola pipeline failed: %s", exc)
+        return JSONResponse(status_code=503, content={"error": "pipeline_failed"})
+
+    return {"events": results}
 
 
 @app.post("/myth")
