@@ -10,18 +10,27 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.db import check_connection, ensure_schema, get_clusters, get_events
+from app.db import check_connection, ensure_schema, get_clusters, get_db, get_events
 from app.models import ClusterResponse, EventResponse, HealthResponse
+from app.telegram import process_telegram_update
 
 load_dotenv()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Validate settings and database schema at startup to fail fast."""
+    """Validate settings, database schema, and seed clusters at startup."""
     get_settings()
     ensure_schema()
+    _ensure_seed_clusters()
     yield
+
+
+def _ensure_seed_clusters() -> None:
+    """Seed clusters if not already present. Called once at startup."""
+    from app.clustering import seed_clusters
+
+    seed_clusters(get_db())
 
 
 app = FastAPI(title="Sasa/Zamani", version="0.1.0", lifespan=lifespan)
@@ -60,8 +69,26 @@ async def list_clusters() -> list[ClusterResponse]:
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request) -> dict:
-    """Receive Telegram webhook updates. Validates, extracts event text, embeds, clusters, and stores."""
-    return {"status": "ok"}
+    """Receive Telegram webhook updates. Always returns 200 to prevent Telegram retry storms."""
+    import logging
+
+    tg_logger = logging.getLogger("app.telegram")
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": True, "skipped": True, "reason": "invalid_json"}
+
+    try:
+        result = process_telegram_update(body)
+    except Exception as exc:
+        tg_logger.error("Unhandled error in telegram pipeline: %s", exc)
+        return {"ok": False, "error": "internal_error"}
+
+    if not result["processed"]:
+        return {"ok": True, "skipped": True, "reason": result["reason"]}
+
+    return {"ok": True}
 
 
 @app.post("/granola")

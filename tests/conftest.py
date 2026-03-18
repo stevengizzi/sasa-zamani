@@ -30,6 +30,7 @@ async def client(mock_env_vars: None) -> AsyncIterator[AsyncClient]:
     with (
         patch("app.main.ensure_schema"),
         patch("app.main.check_connection", return_value=True),
+        patch("app.main._ensure_seed_clusters"),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

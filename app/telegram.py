@@ -1,1 +1,113 @@
 """Telegram webhook handler and message parsing."""
+
+import logging
+
+from app.clustering import assign_cluster
+from app.db import get_cluster_centroids, increment_event_count, insert_event
+from app.embedding import EmbeddingError, embed_text
+
+logger = logging.getLogger(__name__)
+
+PARTICIPANT_MAP: dict[str, str] = {
+    # Populated from config or hardcoded for v1:
+    # "telegram_username": "participant_name"
+}
+
+_processed_update_ids: set[int] = set()
+
+
+def extract_message(update: dict) -> tuple[str, str, int] | None:
+    """Parse a Telegram webhook update payload.
+
+    Returns (text, participant_name, update_id) or None if not a text message.
+    """
+    if not isinstance(update, dict):
+        raise TypeError(f"update must be a dict, got {type(update).__name__}")
+
+    message = update.get("message")
+    if message is None:
+        logger.info("Update has no message field, skipping")
+        return None
+
+    update_id = update.get("update_id")
+    if update_id is None:
+        logger.warning("Update missing update_id")
+        return None
+
+    text = message.get("text")
+    if text is None:
+        logger.info("Non-text message received (update_id=%s), skipping", update_id)
+        return None
+
+    if text.strip() == "":
+        logger.warning("Empty text message received (update_id=%s)", update_id)
+        return None
+
+    from_user = message.get("from", {})
+    username = from_user.get("username", "")
+    participant = PARTICIPANT_MAP.get(username, "unknown")
+
+    return text, participant, update_id
+
+
+def is_duplicate(update_id: int) -> bool:
+    """Check if this update_id has already been processed. Uses in-memory set for v1."""
+    if not isinstance(update_id, int):
+        raise TypeError(f"update_id must be an int, got {type(update_id).__name__}")
+
+    if update_id in _processed_update_ids:
+        return True
+
+    _processed_update_ids.add(update_id)
+    return False
+
+
+def process_telegram_update(update: dict) -> dict:
+    """Full pipeline: extract → check duplicate → embed → assign cluster → store in DB.
+
+    Returns a status dict with keys: processed, reason, event_id.
+    """
+    extracted = extract_message(update)
+    if extracted is None:
+        return {"processed": False, "reason": "not_text_message", "event_id": None}
+
+    text, participant, update_id = extracted
+
+    if is_duplicate(update_id):
+        return {"processed": False, "reason": "duplicate", "event_id": None}
+
+    try:
+        embedding = embed_text(text)
+    except EmbeddingError as exc:
+        logger.error("Embedding failed for update_id=%s: %s", update_id, exc)
+        return {"processed": False, "reason": "embedding_failed", "event_id": None}
+
+    try:
+        centroids = get_cluster_centroids()
+        cluster_id, similarity = assign_cluster(embedding, centroids)
+        logger.info(
+            "Assigned update_id=%s to cluster %s (similarity=%.4f)",
+            update_id,
+            cluster_id,
+            similarity,
+        )
+    except Exception as exc:
+        logger.error("Cluster assignment failed for update_id=%s: %s", update_id, exc)
+        return {"processed": False, "reason": "cluster_failed", "event_id": None}
+
+    try:
+        label = text[:80] if len(text) > 80 else text
+        row = insert_event(
+            label=label,
+            note=text,
+            participant=participant,
+            embedding=embedding,
+            source="telegram",
+            cluster_id=cluster_id,
+        )
+        increment_event_count(cluster_id)
+    except Exception as exc:
+        logger.error("DB write failed for update_id=%s: %s", update_id, exc)
+        return {"processed": False, "reason": "db_failed", "event_id": None}
+
+    return {"processed": True, "reason": "ok", "event_id": row.get("id")}
