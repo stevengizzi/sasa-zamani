@@ -10,7 +10,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.db import check_connection, ensure_schema
+from app.db import check_connection, ensure_schema, get_clusters, get_events
+from app.models import ClusterResponse, EventResponse, HealthResponse
 
 load_dotenv()
 
@@ -43,16 +44,18 @@ async def serve_frontend() -> FileResponse:
     return FileResponse(str(STATIC_DIR / "index.html"))
 
 
-@app.get("/events")
-async def get_events(participant: str | None = None) -> list:
+@app.get("/events", response_model=list[EventResponse])
+async def list_events(participant: str | None = None) -> list[EventResponse]:
     """Return all events as JSON. Optionally filter by participant name."""
-    return []
+    rows = get_events(participant)
+    return [EventResponse(**row) for row in rows]
 
 
-@app.get("/clusters")
-async def get_clusters() -> list:
-    """Return cluster definitions with archetype names, centroids, and myth text."""
-    return []
+@app.get("/clusters", response_model=list[ClusterResponse])
+async def list_clusters() -> list[ClusterResponse]:
+    """Return cluster definitions with archetype names."""
+    rows = get_clusters()
+    return [ClusterResponse(**row) for row in rows]
 
 
 @app.post("/telegram")
@@ -73,11 +76,11 @@ async def generate_myth(request: Request) -> dict:
     return {"myth": ""}
 
 
-@app.get("/health")
-async def health_check() -> dict:
+@app.get("/health", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
     """Health check endpoint for Railway deployment monitoring."""
     db_ok = check_connection()
-    return {
-        "status": "healthy" if db_ok else "degraded",
-        "database": "connected" if db_ok else "disconnected",
-    }
+    return HealthResponse(
+        status="healthy" if db_ok else "degraded",
+        database="connected" if db_ok else "disconnected",
+    )
