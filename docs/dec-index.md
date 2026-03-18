@@ -13,5 +13,7 @@
 | DEC-007 | 2026-03-18 | Bootstrap | Individual + small community (3 participants) as v1 scope | Active |
 | DEC-008 | 2026-03-18 | Bootstrap | Two-Claude architecture for development workflow | Active |
 | DEC-009 | 2026-03-18 | Bootstrap | Both views + animated transition + chained panel navigation | Active |
-| DEC-010 | 2026-03-18 | Bootstrap | Myth generation via Claude API in ancestral register | Active [Inferred] |
-| DEC-011 | 2026-03-18 | Bootstrap | Seed clusters initially, dynamic clustering deferred | Active [Inferred] |
+| DEC-010 | 2026-03-18 | Bootstrap | Myth generation via Claude API in ancestral register | Active — confirmed Sprint 1 |
+| DEC-011 | 2026-03-18 | Bootstrap | Seed clusters initially, dynamic clustering deferred | Active — confirmed Sprint 1 |
+| DEC-012 | 2026-03-18 | 1 | Raw JSON webhook over python-telegram-bot | Active |
+| DEC-013 | 2026-03-18 | 1 | In-memory dedup for Telegram updates | Active |

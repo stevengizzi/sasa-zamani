@@ -45,8 +45,8 @@ The architecture is a classic three-tier web application: a canvas-based fronten
 │  events: id, label, note, participant, embedding,       │
 │          cluster_id, xs, created_at, source             │
 │                                                         │
-│  clusters: id, name, myth_text, centroid_embedding,     │
-│            event_count, last_updated                    │
+│  clusters: id, name, myth_text, centroid,                │
+│            event_count, last_updated, is_seed            │
 │                                                         │
 │  myths: cluster_id, text, generated_at, version         │
 └─────────────────────────────────────────────────────────┘
@@ -78,9 +78,10 @@ Python application handling all server-side logic. Responsibilities: Telegram we
 
 Key backend files (v1):
 - `app/main.py` — FastAPI app, route definitions, startup
+- `app/config.py` — Centralized configuration (env vars, thresholds)
 - `app/embedding.py` — OpenAI embedding calls, similarity math
 - `app/clustering.py` — cluster assignment, centroid management, seed cluster definitions
-- `app/telegram.py` — Telegram webhook handler, message parsing
+- `app/telegram.py` — Telegram webhook handler, raw JSON parsing (DEC-012)
 - `app/granola.py` — Granola transcript parser (speaker attribution, segment extraction)
 - `app/myth.py` — Claude API proxy, prompt construction, caching
 - `app/models.py` — Pydantic models for request/response validation
@@ -89,12 +90,14 @@ Key backend files (v1):
 ### Database — Supabase
 Managed Postgres with pgvector extension. Stores events with their embedding vectors, cluster definitions with centroid embeddings, and cached myth text. Cosine similarity queries for cluster assignment run in SQL.
 
+**Operational note:** `ensure_schema()` at startup verifies that required tables exist (probes) but does not create them. supabase-py cannot execute DDL. Schema creation is a one-time operation via `scripts/init_supabase.sql` in the Supabase SQL editor. The canonical column name in the clusters table is `centroid` (not `centroid_embedding`).
+
 ## Tech Stack
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
 | Frontend | HTML/JS/Canvas | Single file, no build step |
-| Backend | Python 3.12 + FastAPI | Async, auto-generated API docs |
+| Backend | Python 3.11.8 + FastAPI | Async, auto-generated API docs |
 | Database | Supabase (Postgres 15 + pgvector) | Managed, free tier |
 | Embeddings | OpenAI text-embedding-3-small | 1536 dimensions, via Python SDK |
 | Myth generation | Claude claude-sonnet-4-20250514 | Via Anthropic Python SDK |
@@ -102,6 +105,7 @@ Managed Postgres with pgvector extension. Stores events with their embedding vec
 | Deployment | Railway | Auto-deploy from GitHub |
 | Version control | Git + GitHub | Two-Claude architecture bridge |
 | Production URL | https://web-production-0aa47.up.railway.app | Telegram webhook: /telegram |
+| GitHub | https://github.com/stevengizzi/sasa-zamani.git | Source repository |
 
 ## API Endpoints
 
@@ -110,10 +114,10 @@ Managed Postgres with pgvector extension. Stores events with their embedding vec
 | GET | `/` | Serve the Sasa Map frontend |
 | GET | `/events` | Return all events as JSON. Optional `?participant=` filter |
 | GET | `/clusters` | Return cluster definitions with archetype names and centroids |
-| POST | `/telegram` | Telegram webhook receiver. Validates, extracts, embeds, stores |
+| POST | `/telegram` | Telegram webhook receiver. Validates, extracts, embeds, stores. Always returns HTTP 200 (non-200 causes Telegram retry storms) |
 | POST | `/granola` | Upload Granola transcript. Parses, attributes, embeds, stores |
 | POST | `/myth` | Generate mythic sentence for a cluster. Caches result |
-| GET | `/health` | Health check for Railway |
+| GET | `/health` | Health check — returns `{"status": "healthy", "database": "connected/disconnected"}` |
 
 ## Database Schema
 
@@ -226,13 +230,22 @@ sasa-zamani/
 │   ├── roadmap.md
 │   └── sprint-history.md
 ├── tests/
-│   └── ...                  # [Pending Sprint 1]
-├── config/
-│   └── runner.yaml          # [Pending Sprint 1]
+│   ├── conftest.py           # Shared fixtures, env var mocking
+│   ├── test_health.py        # Health endpoint tests
+│   ├── test_db.py            # Database client tests
+│   ├── test_endpoints.py     # REST endpoint tests
+│   ├── test_embedding.py     # Embedding pipeline tests
+│   ├── test_clustering.py    # Clustering logic tests
+│   ├── test_telegram.py      # Telegram webhook tests
+│   ├── test_granola.py       # Granola parser tests
+│   └── test_integration.py   # End-to-end integration tests
 ├── scripts/
-│   └── seed_clusters.py     # Initialize seed cluster centroids
+│   ├── seed_clusters.py      # Initialize seed cluster centroids
+│   ├── centroid_matrix.py    # Compute centroid similarity matrix
+│   └── cluster_sanity.py     # Validate cluster assignment quality
 ├── requirements.txt
-├── Procfile                 # Railway deployment
-├── CLAUDE.md                # Claude Code session context
-└── .env.example             # Required environment variables
+├── pyproject.toml            # pytest config, marker registration
+├── Procfile                  # Railway deployment
+├── CLAUDE.md                 # Claude Code session context
+└── .env.example              # Required environment variables
 ```

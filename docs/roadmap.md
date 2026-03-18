@@ -27,18 +27,18 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 
 ## Build Track Queue
 
-### Sprint 1 — Backend Foundation + Data Pipeline
-**Scope:** Stand up the FastAPI backend, Supabase database, Telegram bot webhook, Granola parser, OpenAI embedding pipeline, and cluster assignment logic. Seed the six initial clusters. Endpoint: GET /events returns real data. POST /telegram stores and embeds incoming messages.
+### Sprint 1 — Backend Foundation + Data Pipeline ✓
+**Status:** Complete (9 sessions, tests 0 → 93)
 
-**Deliverables:**
-- FastAPI app deployed on Railway
-- Supabase schema created with pgvector
-- Telegram bot receiving messages and storing embedded events
+**Delivered:**
+- FastAPI app deployed on Railway with health check
+- Supabase schema created with pgvector (events, clusters, myths)
+- Telegram webhook receiving messages via raw JSON (DEC-012) with in-memory dedup (DEC-013)
 - Granola upload endpoint parsing transcripts into attributed events
-- Seed cluster centroids computed from representative text
-- /events endpoint returning real data to the frontend
-- /clusters endpoint returning cluster definitions
-- /myth endpoint proxying Claude API calls with caching
+- Seed cluster centroids computed and validated (6/6 sanity, centroid matrix healthy)
+- /events, /clusters, /myth endpoints operational
+- CLUSTER_JOIN_THRESHOLD=0.3 calibrated
+- RSK-001 downgraded High → Low
 
 ### Sprint 2 — Frontend Migration
 **Scope:** Migrate the Sasa Map frontend from mocked data to live API data. Replace hardcoded event arrays with fetch calls to /events and /clusters. Preserve both views, the animated transition, panel system, and chained navigation. Add collective/individual toggle. Add participant color encoding.
@@ -85,7 +85,12 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 | DEF-007 | Visual myth layer (image generation) | Phase 3+ | Held per Project Bible §14 |
 | DEF-008 | Name decision (Sasa/Zamani/compound/other) | Phase 2 | Revisit after prototype validated |
 | DEF-009 | Onboarding flow for new users | Phase 4 | Three known users for MVP |
-| DEF-010 | Privacy flag (AI-readable, participant-hidden) | Phase 4 | Trust-based for three collaborators |
+| DEF-010 | increment_event_count not atomic (read+update race) | Sprint 2+ | Fine for v1 single-process, needs Postgres function at scale |
+| DEF-011 | SEED_ARCHETYPES duplicated app/ vs scripts/ | Sprint 2+ | Intentional module isolation, consolidate when stable |
+| DEF-012 | Non-atomic insert_event + increment_event_count | Sprint 2+ | Misleading return on partial failure |
+| DEF-013 | In-memory Telegram dedup set grows unbounded | Sprint 2+ | Needs LRU or periodic clear |
+| DEF-014 | process_granola_upload returns cluster_id as cluster_name | Sprint 2+ | Minor spec deviation |
+| DEF-015 | Privacy flag (AI-readable, participant-hidden) | Phase 4 | Trust-based for three collaborators |
 
 ## Fast-Follow Feature Ideas
 

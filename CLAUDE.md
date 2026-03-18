@@ -5,15 +5,17 @@
 
 ## Active Sprint
 
-**No active sprint.** Bootstrap complete. Sprint 1 ready to plan.
+**No active sprint.** Sprint 1 complete. Sprint 2 ready to plan.
 
 ## Current State
 
+- **Sprints completed:** 1 (Backend Foundation + Data Pipeline)
 - **Active sprint:** None
-- **Next sprint:** 1 (Backend Foundation + Data Pipeline)
-- **Tests:** 0
-- **Infrastructure:** Railway: web-production-0aa47.up.railway.app | Supabase: kngzaasfcbjccivuqbkt.supabase.co | Telegram bot: configured, webhook pending Sprint 1
-- **Prototype:** sasa_zamani_v3.html exists with mocked data — migration target
+- **Next sprint:** 2 (Frontend Migration)
+- **Tests:** 93 (90 pass, 3 skip)
+- **Infrastructure:** Railway: web-production-0aa47.up.railway.app | Supabase: kngzaasfcbjccivuqbkt.supabase.co | Telegram bot: webhook active at /telegram
+- **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
+- **Prototype:** sasa_zamani_v3.html exists with mocked data — migration target for Sprint 2
 
 ## What This Is
 
@@ -23,7 +25,7 @@ Philosophical framework: Mbiti's Bantu time (past pools in front of you, organiz
 
 ## Tech Stack
 
-- **Backend:** Python 3.12 + FastAPI
+- **Backend:** Python 3.11.8 + FastAPI
 - **Database:** Supabase (Postgres 15 + pgvector)
 - **Embeddings:** OpenAI text-embedding-3-small (1536 dim)
 - **Myth generation:** Claude claude-sonnet-4-20250514 via Anthropic SDK
@@ -38,6 +40,7 @@ sasa-zamani/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI app, routes, startup
+│   ├── config.py            # Centralized configuration
 │   ├── embedding.py         # OpenAI embedding calls
 │   ├── clustering.py        # Cluster assignment, centroids, seeds
 │   ├── telegram.py          # Telegram webhook handler
@@ -49,9 +52,21 @@ sasa-zamani/
 │   └── index.html           # Sasa Map frontend
 ├── docs/                    # Canon documents
 ├── tests/
+│   ├── conftest.py          # Shared fixtures, env var mocking
+│   ├── test_health.py       # Health endpoint tests
+│   ├── test_db.py           # Database client tests
+│   ├── test_endpoints.py    # REST endpoint tests
+│   ├── test_embedding.py    # Embedding pipeline tests
+│   ├── test_clustering.py   # Clustering logic tests
+│   ├── test_telegram.py     # Telegram webhook tests
+│   ├── test_granola.py      # Granola parser tests
+│   └── test_integration.py  # End-to-end integration tests
 ├── scripts/
-│   └── seed_clusters.py     # Initialize seed cluster centroids
+│   ├── seed_clusters.py     # Initialize seed cluster centroids
+│   ├── centroid_matrix.py   # Compute centroid similarity matrix
+│   └── cluster_sanity.py    # Validate cluster assignment quality
 ├── requirements.txt
+├── pyproject.toml           # pytest config, marker registration
 ├── Procfile                 # Railway: web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ├── CLAUDE.md                # This file
 └── .env.example
@@ -65,6 +80,7 @@ ANTHROPIC_API_KEY=
 TELEGRAM_BOT_TOKEN=
 SUPABASE_URL=
 SUPABASE_KEY=
+CLUSTER_JOIN_THRESHOLD=0.3
 ```
 
 ## API Endpoints
@@ -91,6 +107,8 @@ Three tables: `events` (id, label, note, participant, source, embedding vector(1
 - DEC-005: Frontend stays as single HTML file (no React migration)
 - DEC-009: Both strata + resonance views, animated transition, chained panel navigation
 - DEC-011: Seed clusters (6 archetypes), dynamic clustering deferred
+- DEC-012: Raw JSON webhook over python-telegram-bot
+- DEC-013: In-memory dedup for Telegram updates
 
 ## Language Constraints
 
@@ -102,4 +120,4 @@ Jessie: #7F77DD · Emma: #D85A30 · Steven: #1D9E75 · Shared: #BA7517
 
 ## Deferred Items
 
-Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view.
+Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 1 carry-forwards: DEF-010 (non-atomic increment_event_count), DEF-011 (duplicated SEED_ARCHETYPES), DEF-012 (non-atomic insert+increment), DEF-013 (unbounded dedup set), DEF-014 (cluster_id as cluster_name).

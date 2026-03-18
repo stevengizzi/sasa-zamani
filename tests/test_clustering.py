@@ -2,10 +2,13 @@
 
 import logging
 import math
+import os
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from dotenv import dotenv_values
 
 from app.clustering import (
     SEED_ARCHETYPES,
@@ -168,13 +171,76 @@ class TestComputeSeedCentroids:
 # Integration tests (real DB + API keys required)
 # ---------------------------------------------------------------------------
 
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+_real_env = dotenv_values(_env_path)
+_has_real_credentials = bool(
+    _real_env.get("OPENAI_API_KEY")
+    and _real_env.get("SUPABASE_URL")
+    and _real_env.get("SUPABASE_KEY")
+)
+
+EXPECTED_ARCHETYPE_NAMES = {a["name"] for a in SEED_ARCHETYPES}
+
+
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not _has_real_credentials,
+    reason="Real OPENAI_API_KEY, SUPABASE_URL, and SUPABASE_KEY required in .env",
+)
 class TestSeedClustersIntegration:
+    @pytest.fixture(autouse=True)
+    def _use_real_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Override mock_env_vars with real credentials from .env."""
+        monkeypatch.setenv("OPENAI_API_KEY", _real_env["OPENAI_API_KEY"])
+        monkeypatch.setenv("SUPABASE_URL", _real_env["SUPABASE_URL"])
+        monkeypatch.setenv("SUPABASE_KEY", _real_env["SUPABASE_KEY"])
+
+        from app.config import get_settings
+        from app.db import reset_client
+
+        get_settings.cache_clear()
+        reset_client()
+
+        yield
+
+        # Cleanup: delete all seed clusters, then reset singletons
+        from app.db import get_db
+
+        db = get_db()
+        for name in EXPECTED_ARCHETYPE_NAMES:
+            db.table("clusters").delete().eq("name", name).execute()
+
+        reset_client()
+        get_settings.cache_clear()
+
     def test_inserts_six_clusters(self) -> None:
-        pass
+        from app.db import get_clusters
+
+        seed_clusters()
+        clusters = get_clusters()
+        cluster_names = {c["name"] for c in clusters}
+
+        assert len(clusters) == 6
+        assert cluster_names == EXPECTED_ARCHETYPE_NAMES
 
     def test_idempotent(self) -> None:
-        pass
+        from app.db import get_clusters
+
+        seed_clusters()
+        seed_clusters()
+        clusters = get_clusters()
+
+        assert len(clusters) == 6
 
     def test_get_clusters_returns_six(self) -> None:
-        pass
+        from app.db import get_clusters
+
+        seed_clusters()
+        clusters = get_clusters()
+
+        assert len(clusters) == 6
+        for cluster in clusters:
+            assert "name" in cluster
+            assert "id" in cluster
+            assert "event_count" in cluster
+            assert cluster["is_seed"] is True

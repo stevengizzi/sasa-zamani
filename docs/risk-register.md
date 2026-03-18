@@ -7,15 +7,22 @@
 
 **RSK-001:** Embedding quality insufficient for meaningful clustering
 **Date:** 2026-03-18
-**Severity:** High
-**Likelihood:** Medium
+**Severity:** Low (downgraded from High — Sprint 1)
+**Likelihood:** Low
 
 **Risk:**
 OpenAI text-embedding-3-small may not produce clusters that feel "surprising and true" on short, informal Telegram messages. The quality of constellation formation is the entire user experience — if events cluster in ways that feel arbitrary or overly broad, the tool fails its core promise.
 
+**Sprint 1 Validation:**
+- Centroid similarity matrix computed: healthy spread 0.25–0.49, mean 0.33
+- Cluster sanity test: 6/6 messages assigned to correct archetype
+- Similarity scores ranged from 0.42 (The Silence) to 0.76 (What the Body Keeps)
+- All scores above the default 0.3 CLUSTER_JOIN_THRESHOLD
+- Default threshold of 0.3 is well-calibrated against the centroid matrix
+
 **Mitigation:**
-1. Test embedding quality early (Sprint 1) with real messages from the team before building the full pipeline.
-2. JOIN_SIM threshold tuning session with real data — the 0.65 value from the prototype was calibrated for tag-based Jaccard, not cosine similarity over embeddings.
+1. ~~Test embedding quality early (Sprint 1) with real messages from the team before building the full pipeline.~~ Done.
+2. ~~JOIN_SIM threshold tuning session with real data.~~ CLUSTER_JOIN_THRESHOLD=0.3, validated.
 3. Fallback: Cohere embed-multilingual-v3 if OpenAI produces poor results.
 4. Longer-term fallback: local sentence-transformers with fine-tuning on the team's actual data.
 

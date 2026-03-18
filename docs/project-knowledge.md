@@ -17,25 +17,26 @@ The core visualization is the Sasa Map: a canvas-based interface with two views 
 
 ## Current State
 
-**Tests:** 0
-**Sprints completed:** 0
-**Active sprint:** None — bootstrapping complete, ready for Sprint 1
+**Tests:** 93 (90 pass, 3 skip)
+**Sprints completed:** 1 (Backend Foundation + Data Pipeline)
+**Active sprint:** None
 **Production URL:** https://web-production-0aa47.up.railway.app
 **Database:** https://kngzaasfcbjccivuqbkt.supabase.co
-**Next sprint:** 1 (Backend Foundation + Data Pipeline)
-**Prototype:** sasa_zamani_v3.html exists with mocked data, two views, panel system, archetype glyphs, Claude API myth generation. Needs migration to real data.
+**GitHub:** https://github.com/stevengizzi/sasa-zamani.git
+**Next sprint:** 2 (Frontend Migration)
+**Prototype:** sasa_zamani_v3.html exists with mocked data — migration target for Sprint 2
 
 ## Architecture
 
 Three-tier: static HTML/JS/Canvas frontend → Python/FastAPI backend (Railway) → Supabase (Postgres + pgvector).
 
-Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, JOIN_SIM threshold TBD. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching.
+Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching.
 
 See docs/architecture.md for full system diagram, database schema, API endpoints, and file structure.
 
 ## Tech Stack
 
-Python 3.12 · FastAPI · Supabase (Postgres 15 + pgvector) · OpenAI embeddings · Claude Sonnet for myth generation · python-telegram-bot · Railway deployment · Single-file HTML/JS/Canvas frontend
+Python 3.11.8 · FastAPI · Supabase (Postgres 15 + pgvector) · OpenAI embeddings · Claude Sonnet for myth generation · python-telegram-bot · Railway deployment · Single-file HTML/JS/Canvas frontend
 
 ## Key Active Decisions
 
@@ -50,8 +51,10 @@ Python 3.12 · FastAPI · Supabase (Postgres 15 + pgvector) · OpenAI embeddings
 | DEC-007 | Individual + 3-person community | Atomic individual, collective overlay |
 | DEC-008 | Two-Claude architecture | Claude.ai planning, Claude Code implementation |
 | DEC-009 | Both views + transition + chained panels | Full interaction model from prototype preserved |
-| DEC-010 | Claude myth generation, ancestral register | [Inferred — confirm] |
-| DEC-011 | Seed clusters, dynamic deferred | [Inferred — confirm] |
+| DEC-010 | Claude myth generation, ancestral register | Confirmed Sprint 1 |
+| DEC-011 | Seed clusters, dynamic deferred | Confirmed Sprint 1 |
+| DEC-012 | Raw JSON webhook over python-telegram-bot | Active |
+| DEC-013 | In-memory dedup for Telegram updates | Active |
 
 See docs/decision-log.md for full rationale, alternatives rejected, and cross-references.
 
@@ -59,7 +62,7 @@ See docs/decision-log.md for full rationale, alternatives rejected, and cross-re
 
 | RSK | Title | Severity |
 |-----|-------|----------|
-| RSK-001 | Embedding quality insufficient for meaningful clustering | High |
+| RSK-001 | Embedding quality insufficient for meaningful clustering | Low |
 | RSK-002 | Myth generation fable risk (therapy-speak, generic wisdom) | High |
 | RSK-003 | No day-2 retention mechanism (habit loop) | High |
 | RSK-004 | Frontend rebuild scope creep | Medium |
