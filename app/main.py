@@ -1,5 +1,6 @@
 """FastAPI application for Sasa/Zamani — meaning-making through semantic clustering and myth generation."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -8,9 +9,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.config import get_settings
+
 load_dotenv()
 
-app = FastAPI(title="Sasa/Zamani", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Validate settings at startup to fail fast on missing env vars."""
+    get_settings()
+    yield
+
+
+app = FastAPI(title="Sasa/Zamani", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,4 +74,4 @@ async def generate_myth(request: Request) -> dict:
 @app.get("/health")
 async def health_check() -> dict:
     """Health check endpoint for Railway deployment monitoring."""
-    return {"status": "ok"}
+    return {"status": "healthy"}
