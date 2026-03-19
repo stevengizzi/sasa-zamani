@@ -51,6 +51,14 @@
 - The backfill_labels tests also mock `generate_event_label` at the script level and continue to pass. The backfill script will need updating in a future session to handle the tuple return.
 - 16 new tests added (spec asked for ≥12): 2 for dataclass fields, 4 for significance parsing in segment_transcript, 4 for filter_by_significance, 4 for dedup_labels, 2 for generate_event_label tuple return + significance default.
 
+### Post-Review Disposition (Tier 2 verdict: CONCERNS)
+
+**F-1 (scope violation — app/db.py modified):** FALSE POSITIVE. The reviewer used `git diff HEAD~1` which compares against the main parent, showing pre-existing uncommitted working tree changes to app/db.py, tests/test_db.py, and scripts/init_supabase.sql. These files are NOT in the session 1 commit (`git show fd20306 --stat` confirms only 5 files: config.py, segmentation.py, test_segmentation.py, closeout, dev log). No fix needed.
+
+**F-2 (close-out manifest incomplete):** FALSE POSITIVE. Same cause as F-1. The close-out correctly lists only the files in the commit. No fix needed.
+
+**F-3 (latent runtime breakage — generate_event_label tuple return):** ACKNOWLEDGED, BY DESIGN. The impl spec explicitly states "Do NOT change: The overall pipeline flow in granola.py or telegram.py (those are wired in later sessions)" and Session 5 is designated to wire the new return type. The sprint-4 branch is not deployed incrementally — all sessions merge together. Callers in telegram.py and backfill_labels.py will be updated in Session 5 before the branch reaches production.
+
 ---END-CLOSE-OUT---
 
 ```json:structured-closeout
