@@ -10,12 +10,12 @@
 | File | Change Type | Rationale |
 |------|-------------|-----------|
 | `app/telegram.py` | modified | Converted `_processed_update_ids` from `set` to `OrderedDict` with 10k cap and oldest-eviction (DEF-013); wrapped `increment_event_count` in try/except so insert survives increment failure (DEF-012) |
-| `app/granola.py` | modified | Wrapped `increment_event_count` in try/except so insert survives increment failure (DEF-012); added comment confirming `cluster_name` returns human-readable name not UUID (DEF-014) |
+| `app/granola.py` | modified | Wrapped `increment_event_count` in try/except so insert survives increment failure (DEF-012); wrapped xs computation in try/except for parity with telegram.py (post-review fix); added comment confirming `cluster_name` returns human-readable name not UUID (DEF-014) |
 | `tests/test_telegram.py` | modified | Updated fixture for OrderedDict; added 3 new tests: `test_dedup_set_cap_enforced`, `test_dedup_set_oldest_evicted`, `test_telegram_increment_failure_event_survives` |
 | `tests/test_granola.py` | modified | Added 2 new tests: `test_granola_return_contract_cluster_name`, `test_granola_increment_failure_event_survives` |
 
 ### Judgment Calls
-- **Separated xs computation into its own try/except in telegram.py:** After separating `increment_event_count` from the insert, the xs computation block (`get_cluster_by_id` → `compute_xs` → `update_event_xs`) was also separated into its own try/except to prevent xs failures from masking the successful insert+increment. This was not specified but follows the same defensive pattern.
+- **Separated xs computation into its own try/except in both pipelines:** After separating `increment_event_count` from the insert, the xs computation block (`get_cluster_by_id` → `compute_xs` → `update_event_xs`) was also separated into its own try/except in both `telegram.py` and `granola.py` to prevent xs failures from masking the successful insert+increment. This was not specified but follows the same defensive pattern. (Granola xs wrapping added as post-review fix for CONCERN-01.)
 
 ### Scope Verification
 | Spec Requirement | Status | Implementation |

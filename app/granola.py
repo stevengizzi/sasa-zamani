@@ -118,10 +118,13 @@ def process_granola_upload(transcript: str) -> list[dict]:
             )
 
         cluster = get_cluster_by_id(cluster_id)
-        if cluster is not None:
-            event_count = cluster["event_count"]
-            xs = compute_xs(cluster["name"], event_count - 1, event_count)
-            update_event_xs(row["id"], xs)
+        try:
+            if cluster is not None:
+                event_count = cluster["event_count"]
+                xs = compute_xs(cluster["name"], event_count - 1, event_count)
+                update_event_xs(row["id"], xs)
+        except Exception as exc:
+            logger.warning("xs computation failed for event %s: %s", row.get("id"), exc)
 
         # cluster_name is the human-readable name (e.g. "The Gate"), not the UUID (DEF-014 verified)
         cluster_name = cluster["name"] if cluster is not None else cluster_id
