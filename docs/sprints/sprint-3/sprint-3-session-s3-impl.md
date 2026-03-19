@@ -10,8 +10,25 @@ Before making any changes:
    ```
    python -m pytest tests/test_myth.py -x -q
    ```
-   Expected: all passing (full suite confirmed by S2 close-out)
+   Expected: all passing (full suite confirmed by timestamp fix close-out)
 3. Verify you are on the correct branch: `main`
+
+## Sprint Context Update (from Work Journal)
+
+**Current test baseline:** 144 passed, 3 skipped, 3 pre-existing errors (integration teardown FK constraint — ignore these)
+**Hard floor:** ≥118 pass
+
+The database now contains real seeded data from two Granola transcripts:
+- March 17 transcript: 178 events (steven: 59, jessie: 35, emma: 84)
+- March 18 transcript: 215 events (shared: 129, steven: 19, emma: 60, jessie: 7)
+- Total: ~393 events across 6 seed clusters
+
+**Cluster distribution from March 18 run:**
+The Table: 102, The Hand: 38, What the Body Keeps: 25, The Silence: 24, The Root: 15, The Gate: 11
+
+**Important context for myth quality testing:** Most events were assigned below the 0.3 cosine similarity threshold (typical range: 0.15–0.29). This is because seed cluster centroids were computed from tags, not from the embedding model. Events are loosely grouped — the myth prompt needs to work with semantically diffuse clusters, not tight ones. This makes the "embarrassment test" (could this sentence apply to anyone?) especially important.
+
+Sessions completed before this one: S1a, S1b, S2, plus a timestamp fix prompt. All merged to main.
 
 ## Objective
 Refine `build_myth_prompt` so myth output for real cluster data passes the Design Brief's tonal test ("marginalia in an old book"). Add thin-cluster handling for constellations with ≤2 events. Create a manual quality testing script.
@@ -86,15 +103,15 @@ After implementation:
 - Test command: `python -m pytest -n auto -q`
 
 ## Definition of Done
-- [ ] `build_myth_prompt` includes expanded register instructions
-- [ ] `build_myth_prompt` includes embarrassment test instruction
-- [ ] `build_myth_prompt` includes event count context
-- [ ] Thin-cluster variant triggers at len(event_labels) ≤ 2
-- [ ] PROHIBITED_WORDS and PREFERRED_WORDS still present
-- [ ] `scripts/test_myth_quality.py` exists and can be run manually
-- [ ] All existing tests pass
-- [ ] 3 new tests written and passing
-- [ ] Close-out report written to file
+- [x] `build_myth_prompt` includes expanded register instructions
+- [x] `build_myth_prompt` includes embarrassment test instruction
+- [x] `build_myth_prompt` includes event count context
+- [x] Thin-cluster variant triggers at len(event_labels) ≤ 2
+- [x] PROHIBITED_WORDS and PREFERRED_WORDS still present
+- [x] `scripts/test_myth_quality.py` exists and can be run manually
+- [x] All existing tests pass
+- [x] 3 new tests written and passing
+- [x] Close-out report written to file
 - [ ] Tier 2 review completed via @reviewer subagent
 
 ## Regression Checklist (Session-Specific)
@@ -144,7 +161,7 @@ session, update both the close-out and review files per the standard protocol.
 ## Sprint-Level Regression Checklist
 
 ### Test Suite Baseline
-- Pre-sprint: ~125 collected, ~122 pass, ~3 skip
+- Current: 144 passed, 3 skipped, 3 pre-existing errors
 - Hard floor: ≥118 pass
 
 ### Critical Invariants

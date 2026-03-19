@@ -27,14 +27,35 @@ PREFERRED_WORDS = (
 def build_myth_prompt(cluster_name: str, event_labels: list[str]) -> str:
     """Construct a prompt for Claude in the ancestral register."""
     labels_block = "\n".join(f"- {label}" for label in event_labels)
+    event_count = len(event_labels)
+    is_thin = event_count <= 2
+
+    length_target = (
+        "Write one sentence (10-20 words)."
+        if is_thin
+        else "Write one sentence (20-35 words)."
+    )
+    thin_framing = (
+        "\nThe constellation is still forming. Name the thread that is beginning to appear."
+        if is_thin
+        else ""
+    )
+
     return (
-        f"You are speaking in an ancestral register — not explanation, not analysis. "
-        f"Short, poetic, oracular.\n\n"
+        f"You are speaking in an ancestral register. Ancestral and exact. "
+        f"A scholar who has spent years inside a subject, now speaking plainly "
+        f"about it to someone they respect.\n\n"
+        f"Not wellness. Not witchy. Not fantasy. Not therapy-speak. Not generic wisdom.\n\n"
+        f"If it sounds like a wellness app, discard it. If it sounds like a technical "
+        f"manual, discard it. If it sounds like marginalia in an old book, keep it.\n\n"
+        f"This sentence could not have been written without these specific events. "
+        f"If it could apply to anyone's life, discard it and try again.\n\n"
         f"Archetype: {cluster_name}\n"
+        f"This constellation holds {event_count} moments.\n"
         f"Events in this cluster:\n{labels_block}\n\n"
-        f"Write one sentence (20-35 words) in an ancestral register that names what "
-        f"this cluster is actually about — what thread runs through all these moments. "
-        f"Speak as if from the past looking forward. No quotation marks.\n\n"
+        f"{length_target} Name what this cluster is actually about — what thread "
+        f"runs through all these moments. Speak as if from the past looking forward. "
+        f"No quotation marks.{thin_framing}\n\n"
         f"Do NOT use these words: {PROHIBITED_WORDS}\n\n"
         f"Prefer these words where they fit naturally: {PREFERRED_WORDS}"
     )

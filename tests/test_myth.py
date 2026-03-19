@@ -22,7 +22,24 @@ class TestBuildMythPrompt:
     def test_includes_ancestral_register_instruction(self) -> None:
         prompt = build_myth_prompt("The Root", ["memory of soil"])
         assert "ancestral register" in prompt
-        assert "not explanation, not analysis" in prompt
+        assert "Ancestral and exact" in prompt
+
+    def test_includes_register_guidance(self) -> None:
+        prompt = build_myth_prompt("The Root", ["memory of soil", "deep earth", "old ground"])
+        assert "ancestral" in prompt
+        assert "marginalia" in prompt
+        assert "scholar" in prompt
+
+    def test_thin_cluster(self) -> None:
+        prompt = build_myth_prompt("The Gate", ["a single door"])
+        assert "still forming" in prompt
+        assert "10-20 words" in prompt
+
+    def test_normal_cluster(self) -> None:
+        labels = ["wrote a letter", "held a pen", "drew a map", "signed the page", "ink stain"]
+        prompt = build_myth_prompt("The Hand", labels)
+        assert "20-35 words" in prompt
+        assert "still forming" not in prompt
 
     def test_includes_prohibited_words(self) -> None:
         prompt = build_myth_prompt("The Silence", ["quiet hours"])
