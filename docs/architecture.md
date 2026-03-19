@@ -97,7 +97,7 @@ Managed Postgres with pgvector extension. Stores events with their embedding vec
 | Layer | Technology | Notes |
 |-------|-----------|-------|
 | Frontend | HTML/JS/Canvas | Single file, no build step |
-| Backend | Python 3.11.8 + FastAPI | Async, auto-generated API docs |
+| Backend | Python 3.11.8 (local) / 3.13.12 (Railway) + FastAPI | Async, auto-generated API docs |
 | Database | Supabase (Postgres 15 + pgvector) | Managed, free tier |
 | Embeddings | OpenAI text-embedding-3-small | 1536 dimensions, via Python SDK |
 | Myth generation | Claude claude-sonnet-4-20250514 | Via Anthropic Python SDK |

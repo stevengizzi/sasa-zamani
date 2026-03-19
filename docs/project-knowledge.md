@@ -36,7 +36,7 @@ See docs/architecture.md for full system diagram, database schema, API endpoints
 
 ## Tech Stack
 
-Python 3.11.8 · FastAPI · Supabase (Postgres 15 + pgvector) · OpenAI embeddings · Claude Sonnet for myth generation · python-telegram-bot · Railway deployment · Single-file HTML/JS/Canvas frontend
+Python 3.11.8 (local) / 3.13.12 (Railway) · FastAPI · Supabase (Postgres 15 + pgvector) · OpenAI embeddings · Claude Sonnet for myth generation · python-telegram-bot · Railway deployment · Single-file HTML/JS/Canvas frontend
 
 ## Key Active Decisions
 

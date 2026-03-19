@@ -25,7 +25,7 @@ Philosophical framework: Mbiti's Bantu time (past pools in front of you, organiz
 
 ## Tech Stack
 
-- **Backend:** Python 3.11.8 + FastAPI
+- **Backend:** Python 3.11.8 (local) / 3.13.12 (Railway) + FastAPI
 - **Database:** Supabase (Postgres 15 + pgvector)
 - **Embeddings:** OpenAI text-embedding-3-small (1536 dim)
 - **Myth generation:** Claude claude-sonnet-4-20250514 via Anthropic SDK
