@@ -33,16 +33,19 @@ import logging
 import sys
 from collections import Counter
 
-from app.clustering import assign_cluster, compute_xs
+from app.archetype_naming import maybe_name_cluster
+from app.clustering import assign_or_create_cluster, compute_xs
+from app.config import get_settings
 from app.db import (
     get_cluster_by_id,
     get_cluster_centroids,
     increment_event_count,
     insert_event,
+    insert_raw_input,
     update_event_xs,
 )
 from app.embedding import EmbeddingError, embed_text
-from app.segmentation import Segment, segment_transcript
+from app.segmentation import Segment, dedup_labels, filter_by_significance, segment_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +70,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Participant name for unmapped speakers (default: shared)",
     )
     parser.add_argument(
-        "--min-length",
-        type=int,
-        default=100,
-        help="Minimum segment character length (default: 100)",
-    )
-    parser.add_argument(
         "--date",
         required=True,
         help="Event date in YYYY-MM-DD format (stored as event_date)",
@@ -85,13 +82,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def filter_by_length(
-    segments: list[Segment], min_length: int
-) -> list[Segment]:
-    """Return only segments whose text meets the minimum character length."""
-    return [s for s in segments if len(s.text) >= min_length]
-
-
 def _resolve_participant(segment: Segment) -> str:
     """Derive the single participant string from a segment's participants list."""
     if len(segment.participants) != 1:
@@ -102,29 +92,37 @@ def _resolve_participant(segment: Segment) -> str:
 def print_dry_run(
     all_segments: list[Segment],
     filtered_segments: list[Segment],
+    threshold: float,
 ) -> None:
     """Print dry-run analysis to stdout."""
+    filtered_set = set(id(s) for s in filtered_segments)
     participant_counts: Counter[str] = Counter(
         _resolve_participant(s) for s in filtered_segments
     )
 
     print(f"Total segments found (before filtering): {len(all_segments)}")
-    print(f"Segments after filtering: {len(filtered_segments)}")
+    print(f"Segments above significance threshold: {len(filtered_segments)} / {len(all_segments)}")
     print(f"Segment count per participant: {dict(participant_counts)}")
     print()
-    for i, segment in enumerate(filtered_segments, 1):
+    for i, segment in enumerate(all_segments, 1):
         participant = _resolve_participant(segment)
         speakers = ", ".join(segment.participants)
-        print(f"  [{i}] ({participant} | speakers: {speakers}) {segment.label}")
+        filtered_tag = "" if id(segment) in filtered_set else " [FILTERED]"
+        print(f"  [{i}] (sig={segment.significance:.2f}) ({participant} | speakers: {speakers}) {segment.label}{filtered_tag}")
         preview = segment.text[:80]
         print(f"       {preview}")
 
 
-def run_pipeline(segments: list[Segment], event_date: str | None = None) -> None:
-    """Run each segment through embed → assign → insert → increment → xs pipeline."""
+def run_pipeline(
+    segments: list[Segment],
+    event_date: str | None = None,
+    raw_input_id: str | None = None,
+) -> None:
+    """Run each segment through embed → assign/create → insert → increment → name → xs pipeline."""
     total = len(segments)
     inserted = 0
     skipped = 0
+    clusters_created = 0
     participant_counts: Counter[str] = Counter()
     cluster_counts: Counter[str] = Counter()
 
@@ -141,7 +139,10 @@ def run_pipeline(segments: list[Segment], event_date: str | None = None) -> None
             continue
 
         try:
-            cluster_id, similarity = assign_cluster(embedding, centroids)
+            cluster_id, similarity, created = assign_or_create_cluster(embedding, centroids)
+            if created:
+                centroids = get_cluster_centroids()
+                clusters_created += 1
             row = insert_event(
                 label=segment.label,
                 note=segment.text,
@@ -151,6 +152,9 @@ def run_pipeline(segments: list[Segment], event_date: str | None = None) -> None
                 cluster_id=cluster_id,
                 event_date=event_date,
                 participants=segment.participants,
+                raw_input_id=raw_input_id,
+                start_line=segment.start_line,
+                end_line=segment.end_line,
             )
         except Exception as exc:
             logger.error("DB insert failed for segment %d: %s", i, exc)
@@ -162,6 +166,13 @@ def run_pipeline(segments: list[Segment], event_date: str | None = None) -> None
         except Exception as exc:
             logger.warning(
                 "increment_event_count failed for cluster %s: %s", cluster_id, exc
+            )
+
+        try:
+            maybe_name_cluster(cluster_id)
+        except Exception as exc:
+            logger.warning(
+                "maybe_name_cluster failed for cluster %s: %s", cluster_id, exc
             )
 
         cluster = None
@@ -185,6 +196,7 @@ def run_pipeline(segments: list[Segment], event_date: str | None = None) -> None
             print(f"Processed {i}/{total} segments...")
 
     print(f"\nDone. Inserted: {inserted}, Skipped: {skipped}")
+    print(f"New clusters created: {clusters_created}")
     print(f"Per-participant: {dict(participant_counts)}")
     print(f"Per-cluster: {dict(cluster_counts)}")
 
@@ -204,14 +216,28 @@ def main(argv: list[str] | None = None) -> None:
     all_segments = segment_transcript(
         transcript_text, speaker_map, args.default_participant
     )
-    filtered_segments = filter_by_length(all_segments, args.min_length)
+    deduped_segments = dedup_labels(all_segments)
+    threshold = get_settings().significance_threshold
+    filtered_segments = filter_by_significance(deduped_segments, threshold)
 
     if args.dry_run:
-        print_dry_run(all_segments, filtered_segments)
+        print_dry_run(deduped_segments, filtered_segments, threshold)
         return
 
     logging.basicConfig(level=logging.INFO)
-    run_pipeline(filtered_segments, event_date=args.date)
+
+    raw_input_row = insert_raw_input(
+        text=transcript_text,
+        source="granola",
+        source_metadata={
+            "file": args.file,
+            "speaker_map": speaker_map,
+            "date": args.date,
+        },
+    )
+    raw_input_id = raw_input_row["id"]
+
+    run_pipeline(filtered_segments, event_date=args.date, raw_input_id=raw_input_id)
 
 
 if __name__ == "__main__":

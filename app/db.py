@@ -32,7 +32,7 @@ def ensure_schema() -> None:
     present at startup so the app fails fast with a clear message.
     """
     client = get_db()
-    for table in ("clusters", "events", "myths"):
+    for table in ("clusters", "events", "myths", "raw_inputs"):
         try:
             client.table(table).select("id", count="exact").limit(0).execute()
         except Exception as exc:
@@ -52,6 +52,34 @@ def check_connection() -> bool:
         return False
 
 
+def insert_raw_input(
+    text: str, source: str, source_metadata: dict | None = None
+) -> dict:
+    """Insert a raw input and return the inserted row."""
+    data: dict = {
+        "text": text,
+        "source": source,
+    }
+    if source_metadata is not None:
+        data["source_metadata"] = source_metadata
+    response = get_db().table("raw_inputs").insert(data).execute()
+    return response.data[0]
+
+
+def get_raw_input(raw_input_id: str) -> dict | None:
+    """Return a raw input by ID, or None if not found."""
+    response = (
+        get_db()
+        .table("raw_inputs")
+        .select("*")
+        .eq("id", raw_input_id)
+        .execute()
+    )
+    if response.data:
+        return response.data[0]
+    return None
+
+
 def insert_event(
     label: str,
     note: str,
@@ -62,6 +90,9 @@ def insert_event(
     xs: float | None = None,
     event_date: str | None = None,
     participants: list[str] | None = None,
+    raw_input_id: str | None = None,
+    start_line: int | None = None,
+    end_line: int | None = None,
 ) -> dict:
     """Insert a new event and return the inserted row."""
     data: dict = {
@@ -79,6 +110,12 @@ def insert_event(
         data["event_date"] = event_date
     if participants is not None:
         data["participants"] = participants
+    if raw_input_id is not None:
+        data["raw_input_id"] = raw_input_id
+    if start_line is not None:
+        data["start_line"] = start_line
+    if end_line is not None:
+        data["end_line"] = end_line
     response = get_db().table("events").insert(data).execute()
     return response.data[0]
 
@@ -188,6 +225,23 @@ def get_cluster_events_labels(cluster_id: str) -> list[str]:
         .execute()
     )
     return [row["label"] for row in response.data]
+
+
+def update_cluster_name(cluster_id: str, name: str) -> None:
+    """Update a cluster's name."""
+    get_db().table("clusters").update({"name": name}).eq("id", cluster_id).execute()
+
+
+def get_cluster_events_notes(cluster_id: str) -> list[str]:
+    """Return event notes (first 200 chars each) for a cluster."""
+    response = (
+        get_db()
+        .table("events")
+        .select("note")
+        .eq("cluster_id", cluster_id)
+        .execute()
+    )
+    return [row["note"][:200] for row in response.data]
 
 
 def get_latest_myth(cluster_id: str) -> dict | None:

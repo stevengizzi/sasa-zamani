@@ -159,6 +159,51 @@ def assign_cluster(
     return best_id, best_score
 
 
+def create_dynamic_cluster(centroid_embedding: list[float]) -> str:
+    """Create a new dynamic cluster with placeholder name. Returns the new cluster ID."""
+    from app.db import insert_cluster
+
+    row = insert_cluster(
+        name="The Unnamed",
+        centroid_embedding=centroid_embedding,
+        is_seed=False,
+        glyph_id=None,
+    )
+    cluster_id = row["id"]
+    logger.info("Created new dynamic cluster %s", cluster_id)
+    return cluster_id
+
+
+def assign_or_create_cluster(
+    embedding: list[float],
+    centroids: list[tuple[str, list[float]]],
+) -> tuple[str, float, bool]:
+    """Assign an embedding to the nearest cluster, or create a new one if below threshold.
+
+    Returns (cluster_id, similarity_score, created).
+    - If best similarity >= threshold: returns (best_cluster_id, score, False)
+    - If best similarity < threshold: creates a new cluster and returns (new_id, score, True)
+    """
+    if not isinstance(centroids, list) or len(centroids) == 0:
+        raise ValueError("centroids must be a non-empty list of (id, embedding) tuples")
+
+    best_id = centroids[0][0]
+    best_score = cosine_similarity(embedding, centroids[0][1])
+
+    for cluster_id, centroid in centroids[1:]:
+        score = cosine_similarity(embedding, centroid)
+        if score > best_score:
+            best_id = cluster_id
+            best_score = score
+
+    settings = get_settings()
+    if best_score >= settings.cluster_join_threshold:
+        return best_id, best_score, False
+
+    new_id = create_dynamic_cluster(embedding)
+    return new_id, best_score, True
+
+
 def compute_seed_centroids() -> dict[str, list[float]]:
     """Embed each seed archetype's representative text and return {name: embedding}."""
     texts = [archetype["representative_text"] for archetype in SEED_ARCHETYPES]

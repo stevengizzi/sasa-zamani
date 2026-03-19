@@ -1,11 +1,14 @@
 """Thematic segmentation engine: segments transcripts and generates event labels via Claude."""
 
 import json
+import logging
 from dataclasses import dataclass
 
 import anthropic
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
 
@@ -18,13 +21,23 @@ Rules:
 - Identify where the conversation shifts topic. Group consecutive speaker turns \
 that share a theme into a single segment.
 - For each segment, return the start and end line numbers (inclusive, 1-indexed), \
-a 3-5 word label, and the list of speakers who contributed.
+a label, the list of speakers who contributed, and a significance score.
 - Segments must cover consecutive line ranges — no reordering.
 - Every content line should belong to exactly one segment (no gaps in coverage \
 of non-empty lines, no overlaps).
 - Segments must be in order: each segment's start_line > previous segment's end_line.
-- Labels should be 3-5 words.
+- Label: A 4-8 word label in the register of a scholar's notebook margin note — \
+precise, evocative, never a vague keyword extraction. Write it as a proposition or \
+observation, not a tag cloud. Example: 'Nakedness as awareness of mortality' not \
+'Garden Eden Fall Naked'. Example: 'Violence as the prerequisite for order' not \
+'Violence centralization power discussion'.
+- Each label must be unique. If two segments share a theme, differentiate the labels \
+by their specific angle or emphasis.
 - List all speakers who contributed to the segment.
+- Rate the significance of each segment on a scale from 0.0 to 1.0, where 1.0 is \
+a rich thematic discussion and 0.0 is pure logistics (introductions, audio setup, \
+scheduling, goodbyes). Content that is primarily administrative or procedural should \
+score below 0.3.
 - Return ONLY a JSON array matching this schema exactly:
 
 ```json
@@ -32,20 +45,28 @@ of non-empty lines, no overlaps).
   {{
     "start_line": 1,
     "end_line": 14,
-    "label": "3-5 word summary",
-    "speakers": ["Speaker A", "Speaker B"]
+    "label": "Nakedness as awareness of mortality",
+    "speakers": ["Speaker A", "Speaker B"],
+    "significance": 0.85
   }}
 ]
 ```
 
-Every segment must have all four fields. Do not wrap in markdown fences or add commentary.
+Every segment must have all five fields. Do not wrap in markdown fences or add commentary.
 
 Transcript:
 {transcript}"""
 
 LABEL_PROMPT = """\
-Generate a 3-5 word label that captures the core theme of this message. \
-Return ONLY the label text, nothing else.
+Generate a label and significance score for this message. \
+The label should be 4-8 words in the register of a scholar's notebook margin note — \
+precise, evocative, never a vague keyword extraction. Write it as a proposition or \
+observation, not a tag cloud.
+
+Rate significance 0.0–1.0 where 1.0 is rich thematic content and 0.0 is pure logistics.
+
+Return ONLY a JSON object matching this schema exactly:
+{{"label": "...", "significance": 0.8}}
 
 Message:
 {text}"""
@@ -62,6 +83,9 @@ class Segment:
     text: str
     label: str
     participants: list[str]
+    start_line: int = 0
+    end_line: int = 0
+    significance: float = 1.0
 
 
 def _create_client() -> anthropic.Anthropic:
@@ -105,10 +129,17 @@ def segment_transcript(
         client = _create_client()
         response = client.messages.create(
             model=MODEL,
-            max_tokens=4096,
+            max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
         )
+        if response.stop_reason == "max_tokens":
+            raise SegmentationError(
+                "Claude response truncated (hit max_tokens). "
+                "The transcript may be too long for a single segmentation call."
+            )
         raw = response.content[0].text.strip()
+    except SegmentationError:
+        raise
     except Exception as exc:
         raise SegmentationError(f"Claude API call failed: {exc}") from exc
 
@@ -149,10 +180,19 @@ def segment_transcript(
                 f"Segment {i} out of range: lines {start}-{end} "
                 f"(transcript has {len(lines)} lines)"
             )
-        if start <= prev_end:
+        if start == prev_end:
+            logger.warning(
+                "Segment %d shares boundary line %d with previous segment, "
+                "adjusting start_line to %d",
+                i, start, prev_end + 1,
+            )
+            start = prev_end + 1
+            if start > end:
+                continue
+        elif start < prev_end:
             raise SegmentationError(
                 f"Segment {i} overlaps previous segment "
-                f"(start_line {start} <= previous end_line {prev_end})"
+                f"(start_line {start} < previous end_line {prev_end})"
             )
 
         segment_text = "\n".join(lines[start - 1 : end])
@@ -161,22 +201,86 @@ def segment_transcript(
         if not segment_text.strip():
             continue
 
+        raw_significance = item.get("significance")
+        if raw_significance is None:
+            logger.warning("Segment %d missing significance, defaulting to 1.0", i)
+            significance = 1.0
+        else:
+            try:
+                significance = float(raw_significance)
+            except (TypeError, ValueError):
+                logger.warning("Segment %d has non-numeric significance %r, defaulting to 1.0", i, raw_significance)
+                significance = 1.0
+            if significance < 0.0:
+                logger.warning("Segment %d significance %f below 0.0, clamping to 0.0", i, significance)
+                significance = 0.0
+            elif significance > 1.0:
+                logger.warning("Segment %d significance %f above 1.0, clamping to 1.0", i, significance)
+                significance = 1.0
+
         participants = _map_speakers(item["speakers"], speaker_map, default_participant)
         segments.append(
-            Segment(text=segment_text, label=item["label"], participants=participants)
+            Segment(
+                text=segment_text,
+                label=item["label"],
+                participants=participants,
+                start_line=start,
+                end_line=end,
+                significance=significance,
+            )
         )
 
     return segments
 
 
-def generate_event_label(text: str) -> str:
-    """Generate a 3-5 word label for a single message via Claude.
+def filter_by_significance(segments: list[Segment], threshold: float) -> list[Segment]:
+    """Return segments with significance >= threshold. Does not mutate input."""
+    return [s for s in segments if s.significance >= threshold]
+
+
+def dedup_labels(segments: list[Segment]) -> list[Segment]:
+    """Deduplicate labels by appending ordinal suffixes. Does not mutate input.
+
+    If "Network state identity formation" appears 3 times, the second becomes
+    "Network state identity formation (II)" and the third "(III)".
+    The first occurrence is unchanged.
+    """
+    _ordinals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+    seen: dict[str, int] = {}
+    result: list[Segment] = []
+    for s in segments:
+        count = seen.get(s.label, 0)
+        seen[s.label] = count + 1
+        if count == 0:
+            result.append(Segment(
+                text=s.text,
+                label=s.label,
+                participants=list(s.participants),
+                start_line=s.start_line,
+                end_line=s.end_line,
+                significance=s.significance,
+            ))
+        else:
+            suffix = _ordinals[count] if count < len(_ordinals) else str(count + 1)
+            result.append(Segment(
+                text=s.text,
+                label=f"{s.label} ({suffix})",
+                participants=list(s.participants),
+                start_line=s.start_line,
+                end_line=s.end_line,
+                significance=s.significance,
+            ))
+    return result
+
+
+def generate_event_label(text: str) -> tuple[str, float]:
+    """Generate a label and significance score for a single message via Claude.
 
     Args:
         text: The message text to label.
 
     Returns:
-        A short label string.
+        A tuple of (label, significance).
 
     Raises:
         SegmentationError: On API failure.
@@ -190,14 +294,30 @@ def generate_event_label(text: str) -> str:
         client = _create_client()
         response = client.messages.create(
             model=MODEL,
-            max_tokens=50,
+            max_tokens=100,
             messages=[{"role": "user", "content": prompt}],
         )
-        label = response.content[0].text.strip()
+        raw = response.content[0].text.strip()
     except Exception as exc:
         raise SegmentationError(f"Claude API call failed: {exc}") from exc
+
+    try:
+        data = json.loads(raw)
+        label = data["label"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        raise SegmentationError(f"Malformed label response from Claude: {raw}")
 
     if not label:
         raise SegmentationError("Claude returned empty label")
 
-    return label
+    significance = data.get("significance")
+    if significance is None:
+        logger.warning("Label response missing significance, defaulting to 1.0")
+        significance = 1.0
+    else:
+        try:
+            significance = float(significance)
+        except (TypeError, ValueError):
+            significance = 1.0
+
+    return (label, significance)
