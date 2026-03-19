@@ -100,7 +100,7 @@ No automated tests (Canvas-based single-file frontend). All verification is visu
 - [x] All existing interactions still work (both views, transition, panels, toggle, chained navigation)
 - [x] No console errors in browser DevTools
 - [x] Close-out report written to file
-- [ ] Tier 2 review completed via @reviewer subagent
+- [x] Tier 2 review completed via @reviewer subagent
 
 ## Regression Checklist (Session-Specific)
 | Check | How to Verify |
