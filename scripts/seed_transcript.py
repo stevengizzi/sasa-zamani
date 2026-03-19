@@ -1,7 +1,8 @@
 """Seed production database with Granola transcript data.
 
-Parses Speaker-labeled transcripts, remaps speakers to participants,
-filters short segments, and runs each through the embedding/clustering pipeline.
+Uses thematic segmentation to split transcripts into semantically coherent
+segments with LLM-generated labels, then runs each through the
+embedding/clustering pipeline.
 
 Usage examples:
 
@@ -29,7 +30,6 @@ Usage examples:
 import argparse
 import json
 import logging
-import re
 import sys
 from collections import Counter
 
@@ -42,22 +42,24 @@ from app.db import (
     update_event_xs,
 )
 from app.embedding import EmbeddingError, embed_text
+from app.segmentation import Segment, segment_transcript
 
 logger = logging.getLogger(__name__)
-
-_SPEAKER_PATTERN = re.compile(r"^(Speaker [A-Z]):\s*", re.MULTILINE)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Seed database from a Granola transcript."
+        description="Seed database from a Granola transcript using thematic segmentation."
     )
     parser.add_argument("--file", required=True, help="Path to transcript file")
     parser.add_argument(
         "--speaker-map",
         required=True,
-        help='JSON mapping Speaker labels to participants, e.g. \'{"Speaker A": "steven"}\'',
+        help=(
+            "JSON mapping raw speaker labels in the transcript to participant names, "
+            "e.g. '{\"Speaker A\": \"steven\"}'"
+        ),
     )
     parser.add_argument(
         "--default-participant",
@@ -78,60 +80,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print analysis without DB/API calls",
+        help="Run segmentation and print analysis without DB/API calls",
     )
     return parser.parse_args(argv)
 
 
-def parse_transcript(
-    text: str,
-    speaker_map: dict[str, str],
-    default_participant: str,
-) -> list[dict[str, str]]:
-    """Parse a Speaker-labeled transcript into attributed segments.
-
-    Returns list of {"text": "...", "participant": "..."}.
-    """
-    if not isinstance(text, str):
-        raise TypeError(f"text must be a str, got {type(text).__name__}")
-
-    stripped = text.strip()
-    if stripped == "":
-        return []
-
-    splits = _SPEAKER_PATTERN.split(stripped)
-
-    segments: list[dict[str, str]] = []
-
-    preamble = splits[0].strip()
-    if preamble:
-        segments.append({"text": preamble, "participant": default_participant})
-
-    for i in range(1, len(splits), 2):
-        speaker_label = splits[i]
-        segment_text = splits[i + 1].strip() if i + 1 < len(splits) else ""
-        if segment_text == "":
-            continue
-        participant = speaker_map.get(speaker_label, default_participant)
-        segments.append({"text": segment_text, "participant": participant})
-
-    return segments
-
-
 def filter_by_length(
-    segments: list[dict[str, str]], min_length: int
-) -> list[dict[str, str]]:
+    segments: list[Segment], min_length: int
+) -> list[Segment]:
     """Return only segments whose text meets the minimum character length."""
-    return [s for s in segments if len(s["text"]) >= min_length]
+    return [s for s in segments if len(s.text) >= min_length]
+
+
+def _resolve_participant(segment: Segment) -> str:
+    """Derive the single participant string from a segment's participants list."""
+    if len(segment.participants) != 1:
+        return "shared"
+    return segment.participants[0]
 
 
 def print_dry_run(
-    all_segments: list[dict[str, str]],
-    filtered_segments: list[dict[str, str]],
+    all_segments: list[Segment],
+    filtered_segments: list[Segment],
 ) -> None:
     """Print dry-run analysis to stdout."""
     participant_counts: Counter[str] = Counter(
-        s["participant"] for s in filtered_segments
+        _resolve_participant(s) for s in filtered_segments
     )
 
     print(f"Total segments found (before filtering): {len(all_segments)}")
@@ -139,11 +113,14 @@ def print_dry_run(
     print(f"Segment count per participant: {dict(participant_counts)}")
     print()
     for i, segment in enumerate(filtered_segments, 1):
-        preview = segment["text"][:80]
-        print(f"  [{i}] ({segment['participant']}) {preview}")
+        participant = _resolve_participant(segment)
+        speakers = ", ".join(segment.participants)
+        print(f"  [{i}] ({participant} | speakers: {speakers}) {segment.label}")
+        preview = segment.text[:80]
+        print(f"       {preview}")
 
 
-def run_pipeline(segments: list[dict[str, str]], event_date: str | None = None) -> None:
+def run_pipeline(segments: list[Segment], event_date: str | None = None) -> None:
     """Run each segment through embed → assign → insert → increment → xs pipeline."""
     total = len(segments)
     inserted = 0
@@ -154,11 +131,10 @@ def run_pipeline(segments: list[dict[str, str]], event_date: str | None = None) 
     centroids = get_cluster_centroids()
 
     for i, segment in enumerate(segments, 1):
-        text = segment["text"]
-        participant = segment["participant"]
+        participant = _resolve_participant(segment)
 
         try:
-            embedding = embed_text(text)
+            embedding = embed_text(segment.text)
         except EmbeddingError as exc:
             logger.error("Embedding failed for segment %d: %s", i, exc)
             skipped += 1
@@ -166,15 +142,15 @@ def run_pipeline(segments: list[dict[str, str]], event_date: str | None = None) 
 
         try:
             cluster_id, similarity = assign_cluster(embedding, centroids)
-            label = text[:80]
             row = insert_event(
-                label=label,
-                note=text,
+                label=segment.label,
+                note=segment.text,
                 participant=participant,
                 embedding=embedding,
                 source="granola",
                 cluster_id=cluster_id,
                 event_date=event_date,
+                participants=segment.participants,
             )
         except Exception as exc:
             logger.error("DB insert failed for segment %d: %s", i, exc)
@@ -225,7 +201,7 @@ def main(argv: list[str] | None = None) -> None:
     with open(args.file) as f:
         transcript_text = f.read()
 
-    all_segments = parse_transcript(
+    all_segments = segment_transcript(
         transcript_text, speaker_map, args.default_participant
     )
     filtered_segments = filter_by_length(all_segments, args.min_length)

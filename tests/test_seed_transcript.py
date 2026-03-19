@@ -1,4 +1,4 @@
-"""Tests for scripts/seed_transcript.py parsing, filtering, and pipeline."""
+"""Tests for scripts/seed_transcript.py segmentation, filtering, and pipeline."""
 
 from unittest.mock import patch
 from uuid import uuid4
@@ -6,69 +6,58 @@ from uuid import uuid4
 import pytest
 
 from app.embedding import EmbeddingError
+from app.segmentation import Segment
 from scripts.seed_transcript import (
     filter_by_length,
     main,
-    parse_transcript,
 )
 
 FAKE_EMBEDDING = [0.1] * 1536
 FAKE_CLUSTER_ID = str(uuid4())
 FAKE_EVENT_ID = str(uuid4())
 
-SAMPLE_TRANSCRIPT = (
-    "Speaker A: This is a long enough segment from speaker A that should"
-    " definitely pass the minimum length filter we have configured at one hundred characters.\n"
-    "Speaker B: Short.\n"
-    "Speaker C: Another sufficiently long segment from speaker C that also exceeds"
+LONG_TEXT_A = (
+    "This is a long enough segment from speaker A that should"
+    " definitely pass the minimum length filter we have configured at one hundred characters."
+)
+LONG_TEXT_C = (
+    "Another sufficiently long segment from speaker C that also exceeds"
     " the minimum character length threshold of one hundred characters easily."
 )
+
+FAKE_SEGMENTS_MIXED = [
+    Segment(text=LONG_TEXT_A, label="Speaker A long segment", participants=["steven"]),
+    Segment(text="Short.", label="Short remark", participants=["emma"]),
+    Segment(text=LONG_TEXT_C, label="Speaker C long segment", participants=["jessie"]),
+]
+
+FAKE_SEGMENTS_SINGLE = [
+    Segment(text=LONG_TEXT_A, label="Speaker A long segment", participants=["steven"]),
+]
 
 SPEAKER_MAP = {"Speaker A": "steven", "Speaker B": "emma", "Speaker C": "jessie"}
 
 
-def test_speaker_remapping_known():
-    segments = parse_transcript(
-        "Speaker A: Hello world from speaker A.",
-        {"Speaker A": "steven"},
-        "shared",
-    )
-    assert len(segments) == 1
-    assert segments[0]["participant"] == "steven"
-
-
-def test_speaker_remapping_unknown_defaults_shared():
-    segments = parse_transcript(
-        "Speaker D: Hello from an unmapped speaker.",
-        {"Speaker A": "steven"},
-        "shared",
-    )
-    assert len(segments) == 1
-    assert segments[0]["participant"] == "shared"
-
-
 def test_min_length_filter_excludes_short():
-    segments = [{"text": "Yeah.", "participant": "shared"}]
+    segments = [Segment(text="Yeah.", label="Short", participants=["shared"])]
     filtered = filter_by_length(segments, 100)
     assert len(filtered) == 0
 
 
 def test_min_length_filter_includes_long():
     long_text = "x" * 150
-    segments = [{"text": long_text, "participant": "steven"}]
+    segments = [Segment(text=long_text, label="Long text", participants=["steven"])]
     filtered = filter_by_length(segments, 100)
     assert len(filtered) == 1
-    assert filtered[0]["text"] == long_text
+    assert filtered[0].text == long_text
 
 
 @patch("scripts.seed_transcript.insert_event")
 @patch("scripts.seed_transcript.embed_text")
-def test_dry_run_no_api_calls(mock_embed, mock_insert, tmp_path):
+@patch("scripts.seed_transcript.segment_transcript", return_value=FAKE_SEGMENTS_SINGLE)
+def test_dry_run_no_api_calls(mock_seg, mock_embed, mock_insert, tmp_path):
     transcript_file = tmp_path / "transcript.md"
-    transcript_file.write_text(
-        "Speaker A: Some text that is long enough to pass the default filter"
-        " threshold of one hundred characters so it will not be excluded.\n"
-    )
+    transcript_file.write_text("Some transcript text.\n")
     main([
         "--file", str(transcript_file),
         "--speaker-map", '{"Speaker A": "steven"}',
@@ -85,11 +74,12 @@ def test_dry_run_no_api_calls(mock_embed, mock_insert, tmp_path):
 @patch("scripts.seed_transcript.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("scripts.seed_transcript.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("scripts.seed_transcript.embed_text", return_value=FAKE_EMBEDDING)
+@patch("scripts.seed_transcript.segment_transcript", return_value=FAKE_SEGMENTS_MIXED)
 def test_end_to_end_mock_pipeline(
-    mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
+    mock_seg, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
 ):
     transcript_file = tmp_path / "transcript.md"
-    transcript_file.write_text(SAMPLE_TRANSCRIPT)
+    transcript_file.write_text("Some transcript text.\n")
 
     main([
         "--file", str(transcript_file),
@@ -98,7 +88,7 @@ def test_end_to_end_mock_pipeline(
         "--min-length", "100",
     ])
 
-    # 3 segments parsed, but "Short." (Speaker B) is < 100 chars → 2 inserted
+    # 3 segments from segmentation, but "Short." is < 100 chars → 2 inserted
     assert mock_embed.call_count == 2
     assert mock_insert.call_count == 2
 
@@ -115,17 +105,16 @@ def test_end_to_end_mock_pipeline(
 @patch("scripts.seed_transcript.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("scripts.seed_transcript.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("scripts.seed_transcript.embed_text", side_effect=[EmbeddingError("API down"), FAKE_EMBEDDING])
+@patch("scripts.seed_transcript.segment_transcript", return_value=[
+    Segment(text="x" * 150, label="First segment", participants=["steven"]),
+    Segment(text="y" * 150, label="Second segment", participants=["emma"]),
+])
 def test_embedding_error_skips_segment(
-    mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
+    mock_seg, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
 ):
     """Individual embedding failure skips that segment, doesn't abort the run."""
     transcript_file = tmp_path / "transcript.md"
-    transcript_file.write_text(
-        "Speaker A: First segment that is long enough to pass the minimum length"
-        " filter threshold of one hundred characters for testing purposes.\n"
-        "Speaker B: Second segment that is also long enough to pass the minimum"
-        " length filter threshold of one hundred characters for testing purposes.\n"
-    )
+    transcript_file.write_text("Some transcript text.\n")
 
     main([
         "--file", str(transcript_file),
@@ -145,15 +134,13 @@ def test_embedding_error_skips_segment(
 @patch("scripts.seed_transcript.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("scripts.seed_transcript.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("scripts.seed_transcript.embed_text", return_value=FAKE_EMBEDDING)
+@patch("scripts.seed_transcript.segment_transcript", return_value=FAKE_SEGMENTS_SINGLE)
 def test_date_arg_passed_to_insert(
-    mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
+    mock_seg, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
 ):
     """--date value is forwarded to insert_event as event_date."""
     transcript_file = tmp_path / "transcript.md"
-    transcript_file.write_text(
-        "Speaker A: A segment that is long enough to pass the minimum length"
-        " filter threshold of one hundred characters for testing purposes.\n"
-    )
+    transcript_file.write_text("Some transcript text.\n")
 
     main([
         "--file", str(transcript_file),
@@ -164,3 +151,50 @@ def test_date_arg_passed_to_insert(
 
     assert mock_insert.call_count == 1
     assert mock_insert.call_args.kwargs["event_date"] == "2025-03-17"
+
+
+# --- New tests: segmentation integration ---
+
+
+@patch("scripts.seed_transcript.update_event_xs")
+@patch("scripts.seed_transcript.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("scripts.seed_transcript.increment_event_count")
+@patch("scripts.seed_transcript.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("scripts.seed_transcript.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("scripts.seed_transcript.embed_text", return_value=FAKE_EMBEDDING)
+@patch("scripts.seed_transcript.segment_transcript", return_value=FAKE_SEGMENTS_SINGLE)
+def test_seed_uses_segmentation(
+    mock_seg, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
+):
+    """segment_transcript is called with transcript text and speaker_map."""
+    transcript_file = tmp_path / "transcript.md"
+    transcript_file.write_text("Some transcript text.\n")
+
+    main([
+        "--file", str(transcript_file),
+        "--speaker-map", '{"Speaker A": "steven"}',
+        "--date", "2025-03-17",
+        "--min-length", "50",
+    ])
+
+    mock_seg.assert_called_once_with("Some transcript text.\n", {"Speaker A": "steven"}, "shared")
+
+
+@patch("scripts.seed_transcript.insert_event")
+@patch("scripts.seed_transcript.embed_text")
+@patch("scripts.seed_transcript.segment_transcript", return_value=FAKE_SEGMENTS_SINGLE)
+def test_seed_dry_run_calls_segmentation(mock_seg, mock_embed, mock_insert, tmp_path):
+    """Dry-run calls segment_transcript but not insert_event or embed_text."""
+    transcript_file = tmp_path / "transcript.md"
+    transcript_file.write_text("Some transcript text.\n")
+
+    main([
+        "--file", str(transcript_file),
+        "--speaker-map", '{"Speaker A": "steven"}',
+        "--date", "2025-03-17",
+        "--dry-run",
+    ])
+
+    mock_seg.assert_called_once()
+    assert mock_embed.call_count == 0
+    assert mock_insert.call_count == 0
