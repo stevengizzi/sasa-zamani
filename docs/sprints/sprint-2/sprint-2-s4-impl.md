@@ -158,12 +158,14 @@ Verification conditions:
 | Existing backend tests pass | `python -m pytest -x -q -n auto` |
 
 ## Close-Out
-After all work is complete, follow the close-out skill in .claude/skills/close-out.md.
+After all work is complete, follow the close-out skill in .claude/workflow/claude/skills/close-out.md.
 
 **Write the close-out report to a file:**
 docs/sprints/sprint-2/session-s4-closeout.md
 
 ## Tier 2 Review (Mandatory — @reviewer Subagent)
+Invoke the @reviewer subagent found at .claude/workflow/claude/agents/reviewer.md.
+
 Provide the @reviewer with:
 1. The review context file: `docs/sprints/sprint-2/review-context.md`
 2. The close-out report path: `docs/sprints/sprint-2/session-s4-closeout.md`

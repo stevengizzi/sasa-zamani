@@ -679,7 +679,7 @@ function makeSpiral(clEvents,col,width,height){
   const sctx=sc.getContext('2d');
   sctx.scale(DPR,DPR);
 
-  const evs=[...clEvents].sort((a,b)=>a.day-b.day);
+  const evs=[...clEvents].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const N=evs.length;
   const maxH=Math.min(height*0.85/N, 30);
   const loopH=Math.max(12,maxH);
@@ -781,7 +781,7 @@ function openArchetypePanel(clusterId){
     <div class="ap-myth" id="ap-myth-text">
       <span class="loading-myth">reading the pattern…</span>
     </div>
-    <div class="ap-meta">${clEvents.length} events · ${cl.glyph_id}</div>
+    <div class="ap-meta">${clEvents.length} events · ${cl.name}</div>
     <div class="ap-divider"></div>
     <div class="ap-spiral-wrap" id="ap-spiral-mount"></div>
   `);
@@ -813,17 +813,16 @@ function openEventPanel(idx){
   const dAgo=DAYS[0]-e.day;
   const hexCol=colToHex(cl.col);
 
-  // Resonant neighbours: top 3 from same cluster by edge weight
+  // Resonant neighbours: top 3 from same cluster by day proximity
   const neighbors=EVENTS
     .map((ev,i)=>{
       if(i===idx)return null;
       if(ev.cluster.id!==cl.id)return null;
-      const key=idx<i?`${idx}:${i}`:`${i}:${idx}`;
-      const w=edgeWeightMap.get(key)||0;
-      return{ev,i,s:w};
+      const dayDist=Math.abs(ev.day-e.day);
+      return{ev,i,dayDist};
     })
-    .filter(x=>x&&x.s>0)
-    .sort((a,b)=>b.s-a.s)
+    .filter(Boolean)
+    .sort((a,b)=>a.dayDist-b.dayDist)
     .slice(0,3);
 
   openPanel(`
@@ -860,10 +859,10 @@ function openEventPanel(idx){
 
     <div class="ep-divider"></div>
     <div class="ep-neighbors-title">resonant neighbours</div>
-    ${neighbors.map(({ev,i:ni,s})=>{
+    ${neighbors.map(({ev,i:ni})=>{
       const ncl=ev.cluster;
       const nhex=colToHex(ncl.col);
-      return`<div class="ep-neighbor" data-idx="${ni}" style="opacity:${0.5+s*0.5}">
+      return`<div class="ep-neighbor" data-idx="${ni}" style="opacity:0.8">
         <span style="flex-shrink:0">${GLYPHS[ncl.glyph_id](nhex,18)}</span>
         <span class="ep-neighbor-label">${ev.label}</span>
         <span class="ep-neighbor-arch">${ncl.name}</span>

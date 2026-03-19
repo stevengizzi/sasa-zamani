@@ -124,7 +124,7 @@ Verification conditions:
 | Grain overlay still visible | Check visual |
 
 ## Close-Out
-After all work is complete, follow the close-out skill in .claude/skills/close-out.md.
+After all work is complete, follow the close-out skill in .claude/workflow/claude/skills/close-out.md.
 
 **Write the close-out report to a file:**
 docs/sprints/sprint-2/session-s3c-closeout.md
