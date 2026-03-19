@@ -60,6 +60,9 @@ None
 - March 18 transcript has 9 speakers (A through I); only B, C, F are mapped — the remaining 6 correctly default to "shared" (129 of 215 filtered segments).
 - The script's `parse_transcript` is distinct from `app/granola.py:parse_transcript` — different regex pattern (`Speaker [A-Z]:` vs named speakers like `Jessie:`), different speaker mapping approach (CLI arg vs hardcoded dict). No code sharing was attempted to avoid modifying existing app/ files.
 
+### Post-Review Fix
+- **CONCERN-01 (LOW):** Potential `UnboundLocalError` if `get_cluster_by_id` raises inside the xs try block — `cluster` variable would be undefined on line 192. **Fix:** Added `cluster = None` initialization before the try block.
+
 ---END-CLOSE-OUT---
 
 ```json:structured-closeout

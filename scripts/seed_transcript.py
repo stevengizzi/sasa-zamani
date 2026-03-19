@@ -180,6 +180,7 @@ def run_pipeline(segments: list[dict[str, str]]) -> None:
                 "increment_event_count failed for cluster %s: %s", cluster_id, exc
             )
 
+        cluster = None
         try:
             cluster = get_cluster_by_id(cluster_id)
             if cluster is not None:
