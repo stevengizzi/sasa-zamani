@@ -129,10 +129,17 @@ def segment_transcript(
         client = _create_client()
         response = client.messages.create(
             model=MODEL,
-            max_tokens=4096,
+            max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
         )
+        if response.stop_reason == "max_tokens":
+            raise SegmentationError(
+                "Claude response truncated (hit max_tokens). "
+                "The transcript may be too long for a single segmentation call."
+            )
         raw = response.content[0].text.strip()
+    except SegmentationError:
+        raise
     except Exception as exc:
         raise SegmentationError(f"Claude API call failed: {exc}") from exc
 
@@ -173,10 +180,19 @@ def segment_transcript(
                 f"Segment {i} out of range: lines {start}-{end} "
                 f"(transcript has {len(lines)} lines)"
             )
-        if start <= prev_end:
+        if start == prev_end:
+            logger.warning(
+                "Segment %d shares boundary line %d with previous segment, "
+                "adjusting start_line to %d",
+                i, start, prev_end + 1,
+            )
+            start = prev_end + 1
+            if start > end:
+                continue
+        elif start < prev_end:
             raise SegmentationError(
                 f"Segment {i} overlaps previous segment "
-                f"(start_line {start} <= previous end_line {prev_end})"
+                f"(start_line {start} < previous end_line {prev_end})"
             )
 
         segment_text = "\n".join(lines[start - 1 : end])

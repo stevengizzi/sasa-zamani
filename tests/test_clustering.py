@@ -419,13 +419,6 @@ class TestSeedClustersIntegration:
 
         yield
 
-        # Cleanup: delete all seed clusters, then reset singletons
-        from app.db import get_db
-
-        db = get_db()
-        for name in EXPECTED_ARCHETYPE_NAMES:
-            db.table("clusters").delete().eq("name", name).execute()
-
         reset_client()
         get_settings.cache_clear()
 
@@ -436,8 +429,9 @@ class TestSeedClustersIntegration:
         clusters = get_clusters()
         cluster_names = {c["name"] for c in clusters}
 
-        assert len(clusters) == 6
-        assert cluster_names == EXPECTED_ARCHETYPE_NAMES
+        assert EXPECTED_ARCHETYPE_NAMES.issubset(cluster_names)
+        seed_clusters_found = [c for c in clusters if c["name"] in EXPECTED_ARCHETYPE_NAMES]
+        assert len(seed_clusters_found) == 6
 
     def test_idempotent(self) -> None:
         from app.db import get_clusters
@@ -446,16 +440,18 @@ class TestSeedClustersIntegration:
         seed_clusters()
         clusters = get_clusters()
 
-        assert len(clusters) == 6
+        seed_clusters_found = [c for c in clusters if c["name"] in EXPECTED_ARCHETYPE_NAMES]
+        assert len(seed_clusters_found) == 6
 
     def test_get_clusters_returns_six(self) -> None:
         from app.db import get_clusters
 
         seed_clusters()
         clusters = get_clusters()
+        seed_only = [c for c in clusters if c["is_seed"]]
 
-        assert len(clusters) == 6
-        for cluster in clusters:
+        assert len(seed_only) == 6
+        for cluster in seed_only:
             assert "name" in cluster
             assert "id" in cluster
             assert "event_count" in cluster

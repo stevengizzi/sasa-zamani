@@ -25,12 +25,13 @@ Speaker A: Good point about the database
 Speaker B: Let's plan the frontend next"""
 
 
-def _mock_claude_response(text: str) -> MagicMock:
+def _mock_claude_response(text: str, stop_reason: str = "end_turn") -> MagicMock:
     """Build a mock Anthropic messages.create response."""
     content_block = MagicMock()
     content_block.text = text
     response = MagicMock()
     response.content = [content_block]
+    response.stop_reason = stop_reason
     return response
 
 
@@ -161,7 +162,7 @@ class TestSegmentTranscript:
         segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["max_tokens"] == 4096
+        assert call_kwargs["max_tokens"] == 16384
 
     @patch("app.segmentation._create_client")
     def test_segment_boundary_validation_start_gt_end(self, mock_client_factory):
@@ -219,6 +220,37 @@ class TestSegmentTranscript:
 
         with pytest.raises(SegmentationError, match="overlaps previous segment"):
             segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
+
+    @patch("app.segmentation._create_client")
+    def test_segment_shared_boundary_adjusts_start(self, mock_client_factory):
+        """When two segments share a boundary line, the second segment's start is adjusted."""
+        shared_boundary = json.dumps([
+            {
+                "start_line": 1,
+                "end_line": 3,
+                "label": "First segment",
+                "speakers": ["Speaker A"],
+                "significance": 0.8,
+            },
+            {
+                "start_line": 3,
+                "end_line": 6,
+                "label": "Second segment",
+                "speakers": ["Speaker B"],
+                "significance": 0.7,
+            },
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(shared_boundary)
+        mock_client_factory.return_value = mock_client
+
+        result = segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
+
+        assert len(result) == 2
+        assert result[0].start_line == 1
+        assert result[0].end_line == 3
+        assert result[1].start_line == 4
+        assert result[1].end_line == 6
 
     @patch("app.segmentation._create_client")
     def test_segment_text_sliced_from_original(self, mock_client_factory):
@@ -533,3 +565,46 @@ class TestDedupLabels:
         original_labels = [s.label for s in segs]
         dedup_labels(segs)
         assert [s.label for s in segs] == original_labels
+
+
+class TestTruncationRegression:
+    """DEF-021: Regression tests for the 10,243-char truncation bug."""
+
+    @patch("app.segmentation._create_client")
+    def test_long_segment_text_not_truncated(self, mock_client_factory):
+        """A segment spanning many lines (15,000+ chars) must pass through without truncation."""
+        long_lines = [f"Speaker A: Line {i} with substantial content padding here" for i in range(300)]
+        transcript = "\n".join(long_lines)
+        total_chars = len(transcript)
+        assert total_chars > 15000, f"Test transcript is only {total_chars} chars"
+
+        one_segment = json.dumps([
+            {
+                "start_line": 1,
+                "end_line": 300,
+                "label": "Extended discussion on meaning",
+                "speakers": ["Speaker A"],
+                "significance": 0.9,
+            },
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(one_segment)
+        mock_client_factory.return_value = mock_client
+
+        result = segment_transcript(transcript, SPEAKER_MAP)
+
+        assert len(result) == 1
+        assert len(result[0].text) == total_chars
+        assert result[0].text == transcript
+
+    @patch("app.segmentation._create_client")
+    def test_max_tokens_truncation_raises_error(self, mock_client_factory):
+        """If Claude response is truncated (stop_reason=max_tokens), raise SegmentationError."""
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(
+            '[{"start_line": 1, "end_line": 2, "label": "Partial', stop_reason="max_tokens"
+        )
+        mock_client_factory.return_value = mock_client
+
+        with pytest.raises(SegmentationError, match="truncated"):
+            segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
