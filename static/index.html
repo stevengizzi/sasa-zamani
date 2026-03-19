@@ -221,6 +221,10 @@ canvas{position:absolute;top:0;left:0;display:block}
 </div>
 
 <!-- Side panel -->
+<div id="loading-state" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;
+  color:rgba(228,232,228,0.35);pointer-events:none;text-align:center;
+  animation:pulse 2s ease-in-out infinite;z-index:2;">The pattern is still forming...</div>
 <div id="clickables"></div>
 <div id="side-panel">
   <button id="panel-close">✕ close</button>
@@ -355,11 +359,13 @@ async function init(){
     rawClusters=await clRes.json();
   }catch(err){
     console.error('Data fetch error:',err);
-    showMessage('The system encountered something genuinely unexpected.');
+    removeLoadingState();
+    showMessage('Something unexpected was encountered.');
     return;
   }
 
   if(!rawEvents.length){
+    removeLoadingState();
     showEmptyState();
     return;
   }
@@ -392,8 +398,8 @@ async function init(){
   CLUSTERS=[...clusterMap.values()];
 
   // ── EVENT MAPPING ─────────────────────────────────────────────────
-  // Find earliest created_at
-  const timestamps=rawEvents.map(e=>new Date(e.created_at).getTime());
+  // Prefer event_date for time axis, fall back to created_at
+  const timestamps=rawEvents.map(e=>new Date(e.event_date||e.created_at).getTime());
   const earliest=Math.min(...timestamps);
   const MS_PER_DAY=86400000;
 
@@ -404,8 +410,9 @@ async function init(){
     })
     .map(e=>{
       const cluster=clusterMap.get(e.cluster_id);
-      const createdMs=new Date(e.created_at).getTime();
-      const day=Math.floor((createdMs-earliest)/MS_PER_DAY);
+      const timeSource=e.event_date||e.created_at;
+      const timeMs=new Date(timeSource).getTime();
+      const day=Math.floor((timeMs-earliest)/MS_PER_DAY);
       return{
         id:e.id,
         label:e.label,
@@ -415,6 +422,7 @@ async function init(){
         xs:e.xs!=null?e.xs:0.5,
         day,
         created_at:e.created_at,
+        event_date:e.event_date||null,
         cluster,
       };
     });
@@ -462,6 +470,7 @@ async function init(){
     e.driftPhase=Math.random()*Math.PI*2;
     e.cx=e.strataX; e.cy=e.strataY;
     e.glow=0;
+    e.fadeCurrent=1;
   });
 
   // ── EDGES (cluster co-membership) ─────────────────────────────────
@@ -548,8 +557,15 @@ function showMessage(text){
   ui.appendChild(msg);
 }
 
+// ── REMOVE LOADING STATE ──────────────────────────────────────────────
+function removeLoadingState(){
+  const el=document.getElementById('loading-state');
+  if(el)el.remove();
+}
+
 // ── BUILD DOM ─────────────────────────────────────────────────────────
 function buildDOM(){
+  removeLoadingState();
   const clickables=document.getElementById('clickables');
 
   // Event labels
@@ -613,7 +629,7 @@ function buildDOM(){
   const dayDateMap=new Map();
   EVENTS.forEach(e=>{
     if(!dayDateMap.has(e.day)){
-      const d=new Date(e.created_at);
+      const d=new Date(e.event_date||e.created_at);
       const mon=d.toLocaleString('en',{month:'short'}).toLowerCase();
       const day=d.getDate();
       dayDateMap.set(e.day,`${mon} ${day}`);
@@ -691,6 +707,11 @@ function setupInteractions(){
   document.getElementById('panel-close').addEventListener('click',()=>{
     const panel=document.getElementById('side-panel');
     if(panel._stopSpiral){panel._stopSpiral();panel._stopSpiral=null;}
+  });
+
+  // Esc key to close panels
+  document.addEventListener('keydown',ev=>{
+    if(ev.key==='Escape'&&panelOpen)closePanelFull();
   });
 
   // Participant toggle
@@ -850,6 +871,16 @@ function openArchetypePanel(clusterId){
     <div class="ap-meta">${clEvents.length} events · ${cl.name}</div>
     <div class="ap-divider"></div>
     <div class="ap-spiral-wrap" id="ap-spiral-mount"></div>
+    <div class="ap-divider"></div>
+    <div class="ap-events-title">EVENTS IN THIS CONSTELLATION</div>
+    ${clEvents.map(ev=>{
+      const evIdx=EVENTS.indexOf(ev);
+      const dAgo=DAYS[0]-ev.day;
+      return`<div class="ap-event-item" data-event-idx="${evIdx}">
+        <span class="ap-event-day">${dAgo===0?'now':`−${dAgo}d`}</span>
+        ${ev.label}
+      </div>`;
+    }).join('')}
   `);
 
   const spiralMount=document.getElementById('ap-spiral-mount');
@@ -868,6 +899,15 @@ function openArchetypePanel(clusterId){
       document.getElementById('side-panel')._stopSpiral=sc._stopAnim;
     });
   }
+
+  // Reverse chaining: click event name → open event panel
+  document.querySelectorAll('.ap-event-item').forEach(el=>{
+    el.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      const idx=parseInt(el.dataset.eventIdx);
+      if(!isNaN(idx)&&idx>=0&&idx<EVENTS.length)openEventPanel(idx);
+    });
+  });
 
   fetchMyth(cl);
 }
@@ -1092,15 +1132,8 @@ function draw(){
     const baseOp=0.04+sc2*0.38;
     const lineW=0.3+ep.s*1.1+gl*1.5;
 
-    // Participant fade for edges
-    let eFade=1;
-    if(activeParticipant!=='all'){
-      const aMatch=ea.participant.toLowerCase()===activeParticipant;
-      const bMatch=eb.participant.toLowerCase()===activeParticipant;
-      if(aMatch&&bMatch)eFade=1;
-      else if(aMatch||bMatch)eFade=0.4;
-      else eFade=0.10;
-    }
+    // Participant fade for edges (derived from smooth per-node fade)
+    const eFade=Math.min(ea.fadeCurrent,eb.fadeCurrent);
 
     if(tp<0.5){
       const op=(baseOp+gl*0.52)*(1-tp*1.4)*eFade;
@@ -1145,9 +1178,11 @@ function draw(){
     const connCount=e.connCount||0;
     const nodeR=1.2+connCount*0.06+gl*1.8;
 
-    // Participant fade
+    // Participant fade (smooth interpolation)
     const pMatch=activeParticipant==='all'||e.participant.toLowerCase()===activeParticipant;
-    const nFade=pMatch?1:0.15;
+    const fadeTarget=pMatch?1:0.15;
+    e.fadeCurrent+=(fadeTarget-e.fadeCurrent)*0.12;
+    const nFade=e.fadeCurrent;
 
     if(gl>0.05){
       const hl=ctx.createRadialGradient(e.cx,e.cy,0,e.cx,e.cy,10+gl*12);

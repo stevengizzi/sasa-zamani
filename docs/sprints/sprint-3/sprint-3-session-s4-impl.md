@@ -3,17 +3,33 @@
 ## Pre-Flight Checks
 Before making any changes:
 1. Read these files to load context:
-   - `static/index.html` (the entire frontend — scan for: panel open/close functions, event click handlers, archetype click handlers, participant toggle handler, data fetch calls)
+   - `static/index.html` (the entire frontend — scan for: panel open/close functions, event click handlers, archetype click handlers, participant toggle handler, data fetch calls, and the strata view time-axis rendering code)
    - `docs/design-reference.md` (Copy Tone section for loading state text)
 2. Run scoped test baseline:
    ```
    python -m pytest tests/test_endpoints.py -x -q
    ```
-   Expected: all passing (full suite confirmed by S3 close-out)
+   Expected: all passing
 3. Verify you are on the correct branch: `main`
 
+## Sprint Context Update (from Work Journal)
+
+**Current test baseline:** 144 passed, 3 skipped, 3 pre-existing errors (integration teardown FK constraint — ignore these)
+**Hard floor:** ≥118 pass
+
+The database now contains real seeded data from two Granola transcripts:
+- March 17 transcript: 178 events (event_date = 2026-03-17)
+- March 18 transcript: 215 events (event_date = 2026-03-18)
+- Total: ~393 events across 6 seed clusters, 3 participants + shared
+
+**Critical frontend issue discovered during sprint:** The strata view time axis currently plots events using `created_at` (the Supabase insert timestamp). All seeded events were inserted today (March 19), so they pile at a single point on the time axis despite having different `event_date` values. Requirement 5 below addresses this — it is the highest-priority item in this session.
+
+Sessions completed before this one: S1a, S1b, S2, timestamp fix, and S3 (running in parallel). All prior sessions merged to main.
+
+**Note:** S3 (myth prompt refinement) may be running in parallel in a separate Claude Code session. S3 modifies `app/myth.py` and creates `scripts/test_myth_quality.py`. There is NO file overlap with S4 — S4 only touches `static/index.html`. However, coordinate git commits if both sessions finish around the same time.
+
 ## Objective
-Add four frontend improvements for demo readiness: Esc key to close panels, archetype→event reverse chaining, smooth fade animation on participant toggle, and a loading state for initial data fetch.
+Add five frontend improvements for demo readiness: strata view time axis fix, Esc key to close panels, archetype→event reverse chaining, smooth fade animation on participant toggle, and a loading state for initial data fetch.
 
 ## Requirements
 
@@ -41,10 +57,19 @@ Add four frontend improvements for demo readiness: Esc key to close panels, arch
    - Remove the loading text once data arrives and the first render completes
    - If data fetch fails, show: "Something unexpected was encountered." (Design Brief error-state language)
 
+5. **Strata view: use `event_date` for time axis (HIGHEST PRIORITY):**
+   The strata view plots events on the Y-axis by time. Currently it reads `created_at` from event data. Change this to prefer `event_date` when present, falling back to `created_at` when `event_date` is null or absent.
+
+   The logic should be: `event.event_date || event.created_at`
+
+   This ensures seeded transcript events (which have `event_date` set to the original transcript date) appear at the correct position on the time axis, rather than all piling at the insert timestamp.
+
+   The `/events` endpoint already returns both `created_at` and `event_date` fields. No backend changes needed.
+
 ## Constraints
 - Do NOT modify: any `app/` files, any `tests/` files, any `scripts/` files, any `docs/` files
 - Do NOT change: the data fetch logic (URLs, parsing, error handling for the API calls themselves)
-- Do NOT change: the Canvas rendering logic for node positioning, view transitions, or color encoding
+- Do NOT change: the Canvas rendering logic for node positioning, view transitions, or color encoding (except the time-axis data source change in requirement 5)
 - Do NOT add: new JavaScript dependencies or external libraries
 - Do NOT refactor: the single-file architecture. All changes go in `static/index.html`.
 - Keep changes minimal and surgical. The 48K file is fragile — test every interaction after each change.
@@ -52,33 +77,36 @@ Add four frontend improvements for demo readiness: Esc key to close panels, arch
 ## Visual Review
 The developer should visually verify the following after this session:
 
-1. **Esc key:** Open an event detail panel → press Esc → panel closes. Open an archetype detail panel → press Esc → panel closes. Press Esc with no panel open → nothing happens (no console errors).
-2. **Reverse chaining:** Click an event node → event panel opens → click archetype name → archetype panel opens → click an event name in the archetype panel → event panel opens for that event. Full cycle works.
-3. **Fade animation:** Click a participant in the toggle → non-matching events fade smoothly (not snap) to reduced opacity over ~300ms. Click "all" → events fade back to full opacity smoothly.
-4. **Loading state:** Hard refresh the page → "The pattern is still forming..." appears briefly → replaced by the map once data loads. (Test with DevTools Network throttling set to "Slow 3G" for a clearer view of the loading state.)
+1. **Strata view time axis:** Events should appear at two distinct time positions (March 17 and March 18), NOT all piled at March 19. This is the most important visual check.
+2. **Esc key:** Open an event detail panel → press Esc → panel closes. Open an archetype detail panel → press Esc → panel closes. Press Esc with no panel open → nothing happens (no console errors).
+3. **Reverse chaining:** Click an event node → event panel opens → click archetype name → archetype panel opens → click an event name in the archetype panel → event panel opens for that event. Full cycle works.
+4. **Fade animation:** Click a participant in the toggle → non-matching events fade smoothly (not snap) to reduced opacity over ~300ms. Click "all" → events fade back to full opacity smoothly.
+5. **Loading state:** Hard refresh the page → "The pattern is still forming..." appears briefly → replaced by the map once data loads. (Test with DevTools Network throttling set to "Slow 3G" for a clearer view of the loading state.)
 
 Verification conditions:
 - Production URL loaded in Chrome with DevTools open (Console tab for errors)
-- Seeded data present (from S2)
+- Seeded data present (~393 events across 6 clusters)
 - Both strata and resonance views tested
 
 ## Test Targets
 No automated tests (Canvas-based single-file frontend). All verification is visual per the Visual Review section above.
 
 ## Definition of Done
-- [ ] Esc key closes any open panel
-- [ ] Clicking event name in archetype panel opens that event's detail panel
-- [ ] Participant toggle opacity change animates smoothly (~300ms)
-- [ ] Loading state text appears before data loads
-- [ ] All existing interactions still work (both views, transition, panels, toggle, chained navigation)
-- [ ] No console errors in browser DevTools
-- [ ] Close-out report written to file
+- [x] Strata view plots events by `event_date` (falling back to `created_at`)
+- [x] Esc key closes any open panel
+- [x] Clicking event name in archetype panel opens that event's detail panel
+- [x] Participant toggle opacity change animates smoothly (~300ms)
+- [x] Loading state text appears before data loads
+- [x] All existing interactions still work (both views, transition, panels, toggle, chained navigation)
+- [x] No console errors in browser DevTools
+- [x] Close-out report written to file
 - [ ] Tier 2 review completed via @reviewer subagent
 
 ## Regression Checklist (Session-Specific)
 | Check | How to Verify |
 |-------|---------------|
 | Both views render correctly | Visual check — strata and resonance views |
+| Strata view shows events at two dates | Events at Mar 17 and Mar 18, not Mar 19 |
 | View transition animates | Click the view toggle, verify animation |
 | Event click → event panel | Click an event node |
 | Archetype click → archetype panel | Click archetype name in event panel |
@@ -116,18 +144,20 @@ session, update both the close-out and review files per the standard protocol.
 
 ## Session-Specific Review Focus (for @reviewer)
 1. Verify NO `app/`, `tests/`, or `scripts/` files were modified
-2. Check that the Esc handler doesn't interfere with text input fields (if any exist)
-3. Check that reverse chaining correctly identifies the event (by ID, not just by label substring match which could be ambiguous)
-4. Check that the fade animation doesn't cause visual artifacts or flicker during the transition
-5. Check that the loading state is removed (not just hidden behind the canvas) after data loads
-6. Review for any new global variables or event listeners that could leak or conflict
+2. Verify the strata view time axis reads `event_date` with fallback to `created_at`
+3. Check that the Esc handler doesn't interfere with text input fields (if any exist)
+4. Check that reverse chaining correctly identifies the event (by ID, not just by label substring match which could be ambiguous)
+5. Check that the fade animation doesn't cause visual artifacts or flicker during the transition
+6. Check that the loading state is removed (not just hidden behind the canvas) after data loads
+7. Review for any new global variables or event listeners that could leak or conflict
 
 ## Visual Review (for @reviewer)
 The reviewer should visually verify (or ask the developer to verify):
-1. Esc key closes panels (both types, no error when no panel open)
-2. Full chained navigation cycle: event → archetype → event (reverse chain)
-3. Participant toggle fades smoothly (~300ms, not instant)
-4. Loading state appears on hard refresh, disappears when data loads
+1. Strata view shows events at two time positions (Mar 17, Mar 18)
+2. Esc key closes panels (both types, no error when no panel open)
+3. Full chained navigation cycle: event → archetype → event (reverse chain)
+4. Participant toggle fades smoothly (~300ms, not instant)
+5. Loading state appears on hard refresh, disappears when data loads
 
 Verification conditions:
 - Production URL in Chrome with DevTools Console open
@@ -136,7 +166,7 @@ Verification conditions:
 ## Sprint-Level Regression Checklist
 
 ### Test Suite Baseline
-- Pre-sprint: ~125 collected, ~122 pass, ~3 skip
+- Current: 144 passed, 3 skipped, 3 pre-existing errors
 - Hard floor: ≥118 pass
 
 ### Critical Invariants
