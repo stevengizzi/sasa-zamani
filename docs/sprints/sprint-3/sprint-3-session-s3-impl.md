@@ -112,7 +112,7 @@ After implementation:
 - [x] All existing tests pass
 - [x] 3 new tests written and passing
 - [x] Close-out report written to file
-- [ ] Tier 2 review completed via @reviewer subagent
+- [x] Tier 2 review completed via @reviewer subagent
 
 ## Regression Checklist (Session-Specific)
 | Check | How to Verify |
