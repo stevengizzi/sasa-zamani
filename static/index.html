@@ -3,6 +3,12 @@
 <head>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
+:root{
+  --color-jessie:#7F77DD;
+  --color-emma:#D85A30;
+  --color-steven:#1D9E75;
+  --color-shared:#BA7517;
+}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#0e0c09}
 canvas{position:absolute;top:0;left:0;display:block}
@@ -176,6 +182,21 @@ canvas{position:absolute;top:0;left:0;display:block}
   text-align:center;animation:pulse 1.5s ease-in-out infinite;
 }
 @keyframes pulse{0%,100%{opacity:0.25}50%{opacity:0.6}}
+
+/* ── PARTICIPANT TOGGLE ───────────────────────────────────────────── */
+.participant-toggle{
+  position:absolute;bottom:22px;right:24px;
+  display:flex;align-items:center;gap:0;pointer-events:all;
+  border:0.5px solid rgba(196,154,58,0.25);z-index:10;
+}
+.pt-btn{
+  font-family:'DM Mono',monospace;font-weight:300;font-size:9px;
+  letter-spacing:0.14em;padding:7px 14px;cursor:pointer;
+  background:transparent;border:none;color:rgba(228,232,228,0.3);
+  transition:color 0.3s,background 0.3s;
+}
+.pt-btn:hover:not(.pt-active){color:rgba(228,232,228,0.6)}
+.pt-sep{width:0.5px;height:28px;background:rgba(196,154,58,0.25)}
 </style>
 </head>
 <body>
@@ -187,6 +208,15 @@ canvas{position:absolute;top:0;left:0;display:block}
     <button class="view-btn active" id="btn-strata">strata</button>
     <div class="sep"></div>
     <button class="view-btn" id="btn-resonance">resonance</button>
+  </div>
+  <div class="participant-toggle" id="participant-toggle">
+    <button class="pt-btn pt-active" data-participant="all" id="pt-all">ALL</button>
+    <div class="pt-sep"></div>
+    <button class="pt-btn" data-participant="jessie" id="pt-jessie">JESSIE</button>
+    <div class="pt-sep"></div>
+    <button class="pt-btn" data-participant="emma" id="pt-emma">EMMA</button>
+    <div class="pt-sep"></div>
+    <button class="pt-btn" data-participant="steven" id="pt-steven">STEVEN</button>
   </div>
 </div>
 
@@ -214,6 +244,15 @@ const GOLD=[196,154,58];
 const VIOLET=[138,138,170];
 const RIVER=[138,176,190];
 const BONE=[228,232,228];
+
+// Participant colors
+const PARTICIPANT_COLORS={
+  jessie:[127,119,221],
+  emma:[216,90,48],
+  steven:[29,158,117],
+  shared:[186,117,23],
+};
+const DEFAULT_PARTICIPANT_COLOR=[228,232,228];
 
 // glyph_id → color mapping
 const GLYPH_COLOR={dream:GOLD,food:GOLD,silence:VIOLET,memory:VIOLET,body:RIVER,writing:RIVER};
@@ -296,6 +335,7 @@ let dayLabelEls=[];
 let viewMode='strata',transProgress=0,transDir=0,tick=0,hovNode=-1;
 const mouse={x:-9999,y:-9999};
 let panelOpen=false;
+let activeParticipant='all';
 
 // Edge weight lookup for similarity
 const edgeWeightMap=new Map();
@@ -483,6 +523,7 @@ async function init(){
   // ── BUILD DOM ─────────────────────────────────────────────────────
   buildDOM();
   setupInteractions();
+  updateParticipantToggle();
   draw();
 }
 
@@ -651,6 +692,31 @@ function setupInteractions(){
     const panel=document.getElementById('side-panel');
     if(panel._stopSpiral){panel._stopSpiral();panel._stopSpiral=null;}
   });
+
+  // Participant toggle
+  document.querySelectorAll('.pt-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      activeParticipant=btn.dataset.participant;
+      updateParticipantToggle();
+    });
+  });
+}
+
+function updateParticipantToggle(){
+  const ptColors={all:[196,154,58],jessie:[127,119,221],emma:[216,90,48],steven:[29,158,117]};
+  document.querySelectorAll('.pt-btn').forEach(btn=>{
+    const p=btn.dataset.participant;
+    if(p===activeParticipant){
+      const [r,g,b]=ptColors[p];
+      btn.classList.add('pt-active');
+      btn.style.color=`rgba(${r},${g},${b},0.9)`;
+      btn.style.background=`rgba(${r},${g},${b},0.06)`;
+    }else{
+      btn.classList.remove('pt-active');
+      btn.style.color='rgba(228,232,228,0.3)';
+      btn.style.background='transparent';
+    }
+  });
 }
 
 // ── PANEL HELPERS ─────────────────────────────────────────────────────
@@ -812,6 +878,7 @@ function openEventPanel(idx){
   const cl=e.cluster;
   const dAgo=DAYS[0]-e.day;
   const hexCol=colToHex(cl.col);
+  const participantHex=colToHex(PARTICIPANT_COLORS[e.participant.toLowerCase()]||DEFAULT_PARTICIPANT_COLOR);
 
   // Resonant neighbours: top 3 from same cluster by day proximity
   const neighbors=EVENTS
@@ -838,11 +905,8 @@ function openEventPanel(idx){
       <div>
         <div class="ep-block-label">from the record</div>
         <div class="ep-block-text">${e.note||'No notes recorded.'}</div>
-        <div style="margin-top:10px">
-          <span style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.1em;
-            color:rgba(138,176,190,0.35);margin-right:8px;">${e.participant}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:7px;letter-spacing:0.1em;
-            color:rgba(138,176,190,0.35);margin-right:8px;">${e.source}</span>
+        <div class="ep-participant" style="margin-top:10px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.10em;color:rgba(138,176,190,0.35);">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${participantHex};margin-right:6px;vertical-align:middle;"></span>${e.participant} · ${e.source}
         </div>
       </div>
       <div class="ep-center-glyph" id="ep-center-glyph-btn">
@@ -1028,8 +1092,18 @@ function draw(){
     const baseOp=0.04+sc2*0.38;
     const lineW=0.3+ep.s*1.1+gl*1.5;
 
+    // Participant fade for edges
+    let eFade=1;
+    if(activeParticipant!=='all'){
+      const aMatch=ea.participant.toLowerCase()===activeParticipant;
+      const bMatch=eb.participant.toLowerCase()===activeParticipant;
+      if(aMatch&&bMatch)eFade=1;
+      else if(aMatch||bMatch)eFade=0.4;
+      else eFade=0.10;
+    }
+
     if(tp<0.5){
-      const op=(baseOp+gl*0.52)*(1-tp*1.4);
+      const op=(baseOp+gl*0.52)*(1-tp*1.4)*eFade;
       if(op<0.003)return;
       const ax=ea.cx,ay=ea.cy,bx=eb.cx,by=eb.cy;
       const mx=(ax+bx)/2+ep.strataCpX,my=(ay+by)/2+ep.strataCpY;
@@ -1042,7 +1116,7 @@ function draw(){
       }
     } else {
       const resT=(tp-0.5)*2;
-      const op=Math.min(0.95,(baseOp+gl*0.62)*resT);
+      const op=Math.min(0.95,(baseOp+gl*0.62)*resT)*eFade;
       if(op<0.003)return;
       const ax=ea.cx,ay=ea.cy,bx=eb.cx,by=eb.cy;
       const mx=(ax+bx)/2,my=(ay+by)/2;
@@ -1065,28 +1139,35 @@ function draw(){
     const gl=e.glow||0;
     const pulse=0.75+Math.sin(tick*0.85+i*1.1)*0.25;
     const cl=e.cluster;
-    const [cr,cg,cb]=cl.col;
+    const [cr,cg,cb]=cl.col; // cluster color for glow/aura
+    const pCol=PARTICIPANT_COLORS[e.participant.toLowerCase()]||DEFAULT_PARTICIPANT_COLOR;
+    const [pr,pg,pb]=pCol; // participant color for node fill
     const connCount=e.connCount||0;
     const nodeR=1.2+connCount*0.06+gl*1.8;
 
+    // Participant fade
+    const pMatch=activeParticipant==='all'||e.participant.toLowerCase()===activeParticipant;
+    const nFade=pMatch?1:0.15;
+
     if(gl>0.05){
       const hl=ctx.createRadialGradient(e.cx,e.cy,0,e.cx,e.cy,10+gl*12);
-      hl.addColorStop(0,`rgba(${cr},${cg},${cb},${gl*0.22})`);
+      hl.addColorStop(0,`rgba(${cr},${cg},${cb},${gl*0.22*nFade})`);
       hl.addColorStop(1,`rgba(${cr},${cg},${cb},0)`);
       ctx.beginPath();ctx.arc(e.cx,e.cy,10+gl*12,0,Math.PI*2);ctx.fillStyle=hl;ctx.fill();
     }
 
     const ag2=ctx.createRadialGradient(e.cx,e.cy,0,e.cx,e.cy,4);
-    ag2.addColorStop(0,`rgba(${cr},${cg},${cb},${0.10*pulse})`);ag2.addColorStop(1,'rgba(0,0,0,0)');
+    ag2.addColorStop(0,`rgba(${cr},${cg},${cb},${0.10*pulse*nFade})`);ag2.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath();ctx.arc(e.cx,e.cy,4,0,Math.PI*2);ctx.fillStyle=ag2;ctx.fill();
 
     ctx.beginPath();ctx.arc(e.cx,e.cy,nodeR,0,Math.PI*2);
-    ctx.fillStyle=`rgba(${cr},${cg},${cb},${0.55+gl*0.45})`;ctx.fill();
+    ctx.fillStyle=`rgba(${pr},${pg},${pb},${(0.55+gl*0.45)*nFade})`;ctx.fill();
 
     if(e.labelEl){
       e.labelEl.style.left=e.cx+'px';e.labelEl.style.top=e.cy+'px';
       let labelOp=0;
-      if(hovNode===i) labelOp=1;
+      if(!pMatch) labelOp=0;
+      else if(hovNode===i) labelOp=1;
       else if(isHov&&gl>0.1) labelOp=1;
       else if(!isHov&&connCount>=7) labelOp=0.22;
       e.labelEl.style.color=`rgba(228,232,228,${labelOp})`;
