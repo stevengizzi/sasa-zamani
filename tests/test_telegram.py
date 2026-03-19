@@ -197,11 +197,13 @@ def test_process_skips_duplicate():
     assert result["reason"] == "duplicate"
 
 
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-def test_process_full_pipeline(mock_embed, mock_centroids, mock_insert, mock_incr):
+def test_process_full_pipeline(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     update = _make_update(text="a meaningful moment", update_id=777)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -209,6 +211,35 @@ def test_process_full_pipeline(mock_embed, mock_centroids, mock_insert, mock_inc
     mock_embed.assert_called_once_with("a meaningful moment")
     mock_insert.assert_called_once()
     mock_incr.assert_called_once_with(FAKE_CLUSTER_ID)
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+def test_process_pipeline_computes_xs(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    update = _make_update(text="a meaningful moment", update_id=778)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_xs.assert_called_once()
+    xs_value = mock_xs.call_args[0][1]
+    assert 0.0 <= xs_value <= 1.0
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Table", "event_count": 3})
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+def test_process_pipeline_increments_event_count(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    update = _make_update(text="dinner together", update_id=779)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_incr.assert_called_once_with(FAKE_CLUSTER_ID)
+    mock_cluster.assert_called_once_with(FAKE_CLUSTER_ID)
 
 
 @patch("app.telegram.embed_text", side_effect=__import__("app.embedding", fromlist=["EmbeddingError"]).EmbeddingError("fail"))

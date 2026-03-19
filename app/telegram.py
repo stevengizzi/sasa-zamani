@@ -2,8 +2,14 @@
 
 import logging
 
-from app.clustering import assign_cluster
-from app.db import get_cluster_centroids, increment_event_count, insert_event
+from app.clustering import assign_cluster, compute_xs
+from app.db import (
+    get_cluster_by_id,
+    get_cluster_centroids,
+    increment_event_count,
+    insert_event,
+    update_event_xs,
+)
 from app.embedding import EmbeddingError, embed_text
 
 logger = logging.getLogger(__name__)
@@ -121,6 +127,11 @@ def process_telegram_update(update: dict) -> dict:
             cluster_id=cluster_id,
         )
         increment_event_count(cluster_id)
+        cluster = get_cluster_by_id(cluster_id)
+        if cluster is not None:
+            event_count = cluster["event_count"]
+            xs = compute_xs(cluster["name"], event_count - 1, event_count)
+            update_event_xs(row["id"], xs)
     except Exception as exc:
         logger.error("DB write failed for update_id=%s: %s", update_id, exc)
         return {"processed": False, "reason": "db_failed", "event_id": None}

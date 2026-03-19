@@ -3,8 +3,14 @@
 import logging
 import re
 
-from app.clustering import assign_cluster
-from app.db import get_cluster_centroids, increment_event_count, insert_event
+from app.clustering import assign_cluster, compute_xs
+from app.db import (
+    get_cluster_by_id,
+    get_cluster_centroids,
+    increment_event_count,
+    insert_event,
+    update_event_xs,
+)
 from app.embedding import EmbeddingError, embed_text
 
 logger = logging.getLogger(__name__)
@@ -103,9 +109,14 @@ def process_granola_upload(transcript: str) -> list[dict]:
             cluster_id=cluster_id,
         )
         increment_event_count(cluster_id)
+        cluster = get_cluster_by_id(cluster_id)
+        if cluster is not None:
+            event_count = cluster["event_count"]
+            xs = compute_xs(cluster["name"], event_count - 1, event_count)
+            update_event_xs(row["id"], xs)
 
         # Look up cluster name for the response
-        cluster_name = cluster_id
+        cluster_name = cluster["name"] if cluster is not None else cluster_id
         results.append({
             "event_id": row.get("id"),
             "participant": segment["participant"],

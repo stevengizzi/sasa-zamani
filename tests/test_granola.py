@@ -86,11 +86,13 @@ def test_speaker_map_contains_all_participants():
 # --- process_granola_upload ---
 
 
+@patch("app.granola.update_event_xs")
+@patch("app.granola.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
 @patch("app.granola.increment_event_count")
 @patch("app.granola.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.granola.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.granola.embed_text", return_value=FAKE_EMBEDDING)
-def test_process_granola_stores_correct_count(mock_embed, mock_centroids, mock_insert, mock_incr):
+def test_process_granola_stores_correct_count(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     results = process_granola_upload(SAMPLE_TRANSCRIPT)
     assert len(results) == 3
     assert mock_embed.call_count == 3
@@ -100,14 +102,30 @@ def test_process_granola_stores_correct_count(mock_embed, mock_centroids, mock_i
         assert result["event_id"] == FAKE_EVENT_ID
 
 
+@patch("app.granola.update_event_xs")
+@patch("app.granola.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
 @patch("app.granola.increment_event_count")
 @patch("app.granola.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.granola.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.granola.embed_text", return_value=FAKE_EMBEDDING)
-def test_process_granola_source_is_granola(mock_embed, mock_centroids, mock_insert, mock_incr):
+def test_process_granola_source_is_granola(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     process_granola_upload(SAMPLE_TRANSCRIPT)
     for call in mock_insert.call_args_list:
         assert call.kwargs["source"] == "granola"
+
+
+@patch("app.granola.update_event_xs")
+@patch("app.granola.get_cluster_by_id", return_value={"name": "The Root", "event_count": 2})
+@patch("app.granola.increment_event_count")
+@patch("app.granola.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.granola.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.granola.embed_text", return_value=FAKE_EMBEDDING)
+def test_process_granola_computes_xs_for_each_segment(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    results = process_granola_upload(SAMPLE_TRANSCRIPT)
+    assert mock_xs.call_count == 3
+    for call in mock_xs.call_args_list:
+        xs_value = call[0][1]
+        assert 0.0 <= xs_value <= 1.0
 
 
 def test_process_granola_empty_raises():
