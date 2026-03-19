@@ -218,6 +218,24 @@ async def test_get_cluster_centroids(mock_supabase):
     assert len(emb) == 1536
 
 
+async def test_get_cluster_centroids_parses_string_centroid(mock_supabase):
+    """pgvector returns centroids as JSON strings — verify they are parsed to list[float]."""
+    centroid_list = [0.5] * 1536
+    centroid_string = "[" + ",".join("0.5" for _ in range(1536)) + "]"
+    select_chain = _chain(mock_supabase, "clusters").select.return_value
+    select_chain.execute.return_value = MagicMock(
+        data=[{"id": "cl-str", "centroid": centroid_string}]
+    )
+
+    centroids = get_cluster_centroids()
+    assert len(centroids) == 1
+    cluster_id, emb = centroids[0]
+    assert cluster_id == "cl-str"
+    assert isinstance(emb, list)
+    assert len(emb) == 1536
+    assert emb == centroid_list
+
+
 # --- increment_event_count ---
 
 

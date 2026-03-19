@@ -1,5 +1,7 @@
 """Supabase client initialization and database queries."""
 
+import json
+
 from supabase import Client, create_client
 
 from app.config import get_settings
@@ -129,10 +131,23 @@ def cluster_exists(name: str) -> bool:
     return response.count > 0
 
 
+def _parse_centroid(raw: str | list[float]) -> list[float]:
+    """Parse a pgvector centroid value into a Python list of floats.
+
+    Supabase returns pgvector columns as JSON strings; this ensures callers
+    always receive a native list.
+    """
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        return json.loads(raw)
+    raise TypeError(f"centroid must be a list or str, got {type(raw).__name__}")
+
+
 def get_cluster_centroids() -> list[tuple[str, list[float]]]:
     """Return list of (cluster_id, centroid) tuples for cluster assignment."""
     rows = get_db().table("clusters").select("id, centroid").execute().data
-    return [(row["id"], row["centroid"]) for row in rows]
+    return [(row["id"], _parse_centroid(row["centroid"])) for row in rows]
 
 
 def increment_event_count(cluster_id: str) -> None:
