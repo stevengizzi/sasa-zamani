@@ -68,8 +68,8 @@ SEED_ARCHETYPES = [
 
 
 XS_CENTERS: dict[str, float] = {
-    "The Gate": 0.12,
-    "The Silence": 0.15,
+    "The Gate": 0.08,
+    "The Silence": 0.20,
     "The Hand": 0.25,
     "The Root": 0.38,
     "What the Body Keeps": 0.50,
@@ -180,5 +180,5 @@ def seed_clusters() -> None:
         if cluster_exists(name):
             logger.info("Cluster %r already exists, skipping", name)
             continue
-        insert_cluster(name=name, centroid_embedding=centroids[name], is_seed=True)
+        insert_cluster(name=name, centroid_embedding=centroids[name], is_seed=True, glyph_id=archetype["glyph_id"])
         logger.info("Inserted seed cluster %r", name)

@@ -146,8 +146,8 @@ class TestSeedArchetypes:
 
 class TestComputeXs:
     EXPECTED_CENTERS = {
-        "The Gate": 0.12,
-        "The Silence": 0.15,
+        "The Gate": 0.08,
+        "The Silence": 0.20,
         "The Hand": 0.25,
         "The Root": 0.38,
         "What the Body Keeps": 0.50,
@@ -210,6 +210,72 @@ class TestComputeSeedCentroids:
 
         expected_names = {a["name"] for a in SEED_ARCHETYPES}
         assert set(result.keys()) == expected_names
+
+
+# ---------------------------------------------------------------------------
+# XS_CENTERS Gate/Silence separation
+# ---------------------------------------------------------------------------
+
+
+class TestXsCentersGateSilenceSeparation:
+    def test_gate_silence_differ_by_at_least_010(self) -> None:
+        assert abs(XS_CENTERS["The Gate"] - XS_CENTERS["The Silence"]) >= 0.10
+
+
+# ---------------------------------------------------------------------------
+# seed_clusters passes glyph_id
+# ---------------------------------------------------------------------------
+
+
+class TestSeedClustersGlyphId:
+    def test_seed_clusters_populates_glyph_id(self) -> None:
+        fake_vectors = [_fake_embedding(fill=i * 0.1) for i in range(6)]
+
+        mock_openai = MagicMock()
+        data = [
+            SimpleNamespace(embedding=vec, index=i)
+            for i, vec in enumerate(fake_vectors)
+        ]
+        mock_openai.embeddings.create.return_value = SimpleNamespace(data=data)
+
+        mock_db_client = MagicMock()
+        # cluster_exists returns False for all (so all get inserted)
+        cluster_select = mock_db_client.table("clusters").select.return_value
+        cluster_select.eq.return_value.limit.return_value.execute.return_value = MagicMock(count=0)
+        # insert returns a fake row
+        mock_db_client.table("clusters").insert.return_value.execute.return_value = MagicMock(
+            data=[{"id": "cl-fake", "name": "fake", "glyph_id": "fake"}]
+        )
+
+        with (
+            patch("app.embedding.get_embedding_client", return_value=mock_openai),
+            patch("app.db.create_client", return_value=mock_db_client),
+        ):
+            from app.config import get_settings
+            from app.db import reset_client
+
+            get_settings.cache_clear()
+            reset_client()
+            seed_clusters()
+
+        # Verify insert was called with glyph_id for each archetype
+        insert_calls = mock_db_client.table("clusters").insert.call_args_list
+        glyph_ids_passed = [call[0][0].get("glyph_id") for call in insert_calls]
+        expected_glyph_ids = {a["glyph_id"] for a in SEED_ARCHETYPES}
+        assert set(glyph_ids_passed) == expected_glyph_ids
+        assert all(gid is not None for gid in glyph_ids_passed)
+
+
+# ---------------------------------------------------------------------------
+# seed_clusters.py script import
+# ---------------------------------------------------------------------------
+
+
+class TestSeedClustersScriptImport:
+    def test_seed_clusters_script_imports(self) -> None:
+        import scripts.seed_clusters  # noqa: F401
+        assert hasattr(scripts.seed_clusters, "SEED_ARCHETYPES")
+        assert scripts.seed_clusters.SEED_ARCHETYPES is SEED_ARCHETYPES
 
 
 # ---------------------------------------------------------------------------

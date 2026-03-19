@@ -240,24 +240,73 @@ async def test_get_cluster_centroids_parses_string_centroid(mock_supabase):
 
 
 async def test_increment_event_count(mock_supabase):
-    # Mock the read step
-    select_chain = (
-        _chain(mock_supabase, "clusters")
-        .select.return_value
-        .eq.return_value
-        .single.return_value
-    )
-    select_chain.execute.return_value = MagicMock(data={"event_count": 5})
-
-    # Mock the update step
-    update_chain = (
-        _chain(mock_supabase, "clusters")
-        .update.return_value
-        .eq.return_value
-    )
-    update_chain.execute.return_value = MagicMock(data=[{"event_count": 6}])
+    rpc_chain = mock_supabase.rpc.return_value
+    rpc_chain.execute.return_value = MagicMock(data=None)
 
     increment_event_count("cl-1")
 
-    # Verify update was called with incremented count
-    _chain(mock_supabase, "clusters").update.assert_called_with({"event_count": 6})
+    mock_supabase.rpc.assert_called_once_with("increment_event_count", {"cid": "cl-1"})
+
+
+# --- insert_cluster glyph_id ---
+
+
+async def test_insert_cluster_with_glyph_id(mock_supabase):
+    fake_cluster = {
+        "id": "cl-g1",
+        "name": "The Gate",
+        "glyph_id": "gate",
+        "is_seed": True,
+        "event_count": 0,
+    }
+    insert_chain = _chain(mock_supabase, "clusters").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_cluster])
+
+    result = insert_cluster(name="The Gate", centroid_embedding=[0.5] * 1536, is_seed=True, glyph_id="gate")
+    assert result["glyph_id"] == "gate"
+
+    call_args = _chain(mock_supabase, "clusters").insert.call_args
+    data_dict = call_args[0][0]
+    assert data_dict["glyph_id"] == "gate"
+
+
+async def test_insert_cluster_without_glyph_id(mock_supabase):
+    fake_cluster = {
+        "id": "cl-g2",
+        "name": "The Root",
+        "glyph_id": None,
+        "is_seed": False,
+        "event_count": 0,
+    }
+    insert_chain = _chain(mock_supabase, "clusters").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_cluster])
+
+    result = insert_cluster(name="The Root", centroid_embedding=[0.5] * 1536)
+    assert result["glyph_id"] is None
+
+    call_args = _chain(mock_supabase, "clusters").insert.call_args
+    data_dict = call_args[0][0]
+    assert "glyph_id" not in data_dict
+
+
+# --- atomic increment ---
+
+
+async def test_increment_event_count_atomic(mock_supabase):
+    rpc_chain = mock_supabase.rpc.return_value
+    rpc_chain.execute.return_value = MagicMock(data=None)
+
+    increment_event_count("cl-atomic")
+
+    mock_supabase.rpc.assert_called_once_with("increment_event_count", {"cid": "cl-atomic"})
+    # Verify no select+update pattern (atomic via RPC)
+    _chain(mock_supabase, "clusters").select.assert_not_called()
+
+
+async def test_increment_event_count_from_zero(mock_supabase):
+    rpc_chain = mock_supabase.rpc.return_value
+    rpc_chain.execute.return_value = MagicMock(data=None)
+
+    increment_event_count("cl-zero")
+
+    mock_supabase.rpc.assert_called_once_with("increment_event_count", {"cid": "cl-zero"})

@@ -107,13 +107,16 @@ def insert_cluster(
     name: str,
     centroid_embedding: list[float],
     is_seed: bool = False,
+    glyph_id: str | None = None,
 ) -> dict:
     """Insert a new cluster and return the inserted row."""
-    data = {
+    data: dict = {
         "name": name,
         "centroid": centroid_embedding,
         "is_seed": is_seed,
     }
+    if glyph_id is not None:
+        data["glyph_id"] = glyph_id
     response = get_db().table("clusters").insert(data).execute()
     return response.data[0]
 
@@ -151,17 +154,8 @@ def get_cluster_centroids() -> list[tuple[str, list[float]]]:
 
 
 def increment_event_count(cluster_id: str) -> None:
-    """Increment event_count for a cluster by 1."""
-    client = get_db()
-    row = (
-        client.table("clusters")
-        .select("event_count")
-        .eq("id", cluster_id)
-        .single()
-        .execute()
-    )
-    new_count = row.data["event_count"] + 1
-    client.table("clusters").update({"event_count": new_count}).eq("id", cluster_id).execute()
+    """Increment event_count for a cluster by 1 (atomic via Postgres RPC)."""
+    get_db().rpc("increment_event_count", {"cid": cluster_id}).execute()
 
 
 def get_cluster_by_id(cluster_id: str) -> dict | None:
