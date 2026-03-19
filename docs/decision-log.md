@@ -298,3 +298,26 @@ Single-process Railway deployment means one Python process handles all requests.
 
 **Supersedes:** N/A
 **Cross-References:** DEC-004 (Railway deployment), DEF-013 (unbounded set growth)
+
+---
+
+**DEC-014:** Lift do-not-modify constraint on telegram.py and granola.py
+**Date:** 2026-03-19
+**Sprint:** 2
+**Session:** Pipeline Fix (impromptu)
+
+**Decision:**
+Lifted the do-not-modify constraint on telegram.py and granola.py for a targeted pipeline wiring fix (compute_xs + event_count verification).
+
+**Alternatives Rejected:**
+1. Deferring to Sprint 3: Would leave broken behavior deployed — myth caching wouldn't work and xs values wouldn't be computed for new events.
+2. Backfill-only workaround: Doesn't fix the live pipeline. New events arriving via Telegram or Granola would still lack xs values and wouldn't trigger event_count increments.
+
+**Rationale:**
+Sprint 2 planning placed telegram.py and granola.py on the do-not-modify list to protect the input pipeline during frontend migration. By the time this fix was needed, frontend migration was complete and verified. The fixes were additive only — adding `compute_xs()` and `increment_event_count()` calls to existing flows, no restructuring. The constraint had served its purpose (protecting the input pipeline while the frontend was being migrated) and was no longer load-bearing.
+
+**Constraints:**
+Frontend migration must be complete and verified before modifying input pipeline files. Fixes must be additive only (no restructuring).
+
+**Supersedes:** N/A
+**Cross-References:** DEC-006 (input modalities), DEF-010 (non-atomic increment)

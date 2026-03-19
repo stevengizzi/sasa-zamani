@@ -17,3 +17,4 @@
 | DEC-011 | 2026-03-18 | Bootstrap | Seed clusters initially, dynamic clustering deferred | Active — confirmed Sprint 1 |
 | DEC-012 | 2026-03-18 | 1 | Raw JSON webhook over python-telegram-bot | Active |
 | DEC-013 | 2026-03-18 | 1 | In-memory dedup for Telegram updates | Active |
+| DEC-014 | 2026-03-19 | 2 | Lift do-not-modify constraint on telegram.py/granola.py | Active |

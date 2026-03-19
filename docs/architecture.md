@@ -1,7 +1,7 @@
 # Architecture
 
 > Technical blueprint. How the system is built.
-> Last updated: 2026-03-18
+> Last updated: 2026-03-19
 
 ## Overview
 
@@ -68,7 +68,7 @@ The architecture is a classic three-tier web application: a canvas-based fronten
 ## Components
 
 ### Frontend — The Sasa Map
-Single HTML file with inline JavaScript. Canvas-based rendering. Two views (strata, resonance) with animated transition. Slide-out detail panels for events and archetypes. Fetches event data from backend REST API on load and periodically. Claude myth generation proxied through backend.
+Single HTML file with inline JavaScript. Canvas-based rendering. Two views (strata, resonance) with animated transition. Slide-out detail panels for events and archetypes with chained internal navigation (event→archetype, archetype→event). Fetches live data from `/events` and `/clusters` endpoints on load (migrated from hardcoded mock data in Sprint 2). Claude myth generation proxied through backend via `/myth` endpoint. Participant color encoding (Jessie purple, Emma coral, Steven teal, shared gold) with individual/collective toggle and opacity fade for non-selected participants.
 
 Key frontend files (v1):
 - `static/index.html` — the entire frontend (migrated from sasa_zamani_v3.html)
@@ -83,9 +83,9 @@ Key backend files (v1):
 - `app/clustering.py` — cluster assignment, centroid management, seed cluster definitions
 - `app/telegram.py` — Telegram webhook handler, raw JSON parsing (DEC-012)
 - `app/granola.py` — Granola transcript parser (speaker attribution, segment extraction)
-- `app/myth.py` — Claude API proxy, prompt construction, caching
-- `app/models.py` — Pydantic models for request/response validation
-- `app/db.py` — Supabase client, queries
+- `app/myth.py` — Claude API proxy, prompt construction, caching (build_myth_prompt, should_regenerate, generate_myth, get_or_generate_myth). PROHIBITED_WORDS list enforces ancestral register.
+- `app/models.py` — Pydantic models for request/response validation (includes MythRequest/MythResponse)
+- `app/db.py` — Supabase client, queries (includes get_cluster_by_id, get_cluster_events_labels, get_latest_myth, insert_myth, update_cluster_myth)
 
 ### Database — Supabase
 Managed Postgres with pgvector extension. Stores events with their embedding vectors, cluster definitions with centroid embeddings, and cached myth text. Cosine similarity queries for cluster assignment run in SQL.
@@ -183,8 +183,11 @@ CREATE INDEX ON clusters USING ivfflat (centroid vector_cosine_ops) WITH (lists 
 ### Cluster Centroid Update
 When a new event joins a cluster, the centroid is recomputed as the mean of all member event embeddings. This is an incremental update: `new_centroid = (old_centroid * n + new_embedding) / (n + 1)`. The centroid shifts slightly with each new event, which means cluster boundaries are alive — an event that was borderline may eventually migrate if a better cluster forms nearby.
 
+### Event Processing Pipeline (compute_xs + event_count)
+When a new event is stored via Telegram or Granola, the pipeline: (1) embeds the text, (2) assigns to a cluster, (3) calls `compute_xs()` to compute the event's semantic x-position within its cluster (0.0–1.0), (4) increments the cluster's `event_count`. Both `telegram.py` and `granola.py` call these functions after event insertion (wired in Sprint 2).
+
 ### Myth Regeneration Trigger
-Myth text is regenerated when a cluster's event count has changed by 3+ since the last generation. The old myth is preserved in the myths table (revision history). The frontend requests myth text via `/myth` endpoint; the backend checks cache freshness and regenerates if stale.
+Myth text is regenerated when a cluster's event count has changed by 3+ since the last generation (`should_regenerate` in `app/myth.py`). The old myth is preserved in the myths table (revision history). The frontend requests myth text via `/myth` POST endpoint (`MythRequest` → `MythResponse`); the backend checks cache freshness and regenerates if stale.
 
 ### Granola Transcript Parsing
 1. Split transcript on speaker label patterns (`Speaker A:`, `Speaker B:`, etc.)
@@ -238,9 +241,12 @@ sasa-zamani/
 │   ├── test_clustering.py    # Clustering logic tests
 │   ├── test_telegram.py      # Telegram webhook tests
 │   ├── test_granola.py       # Granola parser tests
+│   ├── test_myth.py          # Myth generation tests
 │   └── test_integration.py   # End-to-end integration tests
 ├── scripts/
+│   ├── __init__.py
 │   ├── seed_clusters.py      # Initialize seed cluster centroids
+│   ├── backfill_xs.py        # Backfill xs values for existing events
 │   ├── centroid_matrix.py    # Compute centroid similarity matrix
 │   └── cluster_sanity.py     # Validate cluster assignment quality
 ├── requirements.txt

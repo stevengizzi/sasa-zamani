@@ -33,15 +33,22 @@ OpenAI text-embedding-3-small may not produce clusters that feel "surprising and
 
 **RSK-002:** Myth generation quality — fable risk
 **Date:** 2026-03-18
-**Severity:** High
+**Severity:** Medium (downgraded from High — Sprint 2)
 **Likelihood:** Medium
 
 **Risk:**
 Claude's mythic sentence output may default to therapy-speak, generic wisdom, or explicit moral statements (fable) rather than the ancestral, felt, non-extractable register the project requires. The Project Bible's critical distinction: "if you can read it and immediately extract one clean propositional truth, it's probably a fable." The current prototype prompt works reasonably well but sometimes produces generic outputs.
 
+**Sprint 2 Implementation:**
+- Myth module implemented in `app/myth.py` with `build_myth_prompt`, `should_regenerate`, `generate_myth`, `get_or_generate_myth`
+- PROHIBITED_WORDS constant enforces banned word list: journey, growth, explore, reflect, transformation, powerful, detect, discover, reveal, activate, unlock
+- Prompt instructs Claude to speak in ancestral register — from the past looking forward
+- Caching with delta-based regeneration (3+ new events triggers refresh)
+- Risk partially mitigated at the implementation level — needs production testing with real cluster data to validate output quality
+
 **Mitigation:**
-1. Prompt engineering sprint with Emma (who owns the tonal register) before launch.
-2. Banned word list enforced in the prompt: journey, growth, explore, reflect, transformation (unless earned), powerful, detect, discover, reveal, activate, unlock.
+1. ~~Prompt engineering sprint with Emma (who owns the tonal register) before launch.~~ Partially addressed: PROHIBITED_WORDS list implemented. Full prompt review with Emma still needed.
+2. ~~Banned word list enforced in the prompt.~~ Done — PROHIBITED_WORDS in `app/myth.py`.
 3. A/B testing: generate 3 myth candidates per cluster, let the team select the best. Use selections to refine the prompt.
 4. The embarrassment test from the Project Bible: "A good truth could not have been generated without this person's data." Apply as a quality gate.
 

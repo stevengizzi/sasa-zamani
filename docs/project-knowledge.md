@@ -1,7 +1,7 @@
 # Project Knowledge — Sasa/Zamani
 
 > Tier A operational context for Claude.ai and Claude Code.
-> Last updated: 2026-03-18
+> Last updated: 2026-03-19
 
 ## What Is This Project
 
@@ -17,20 +17,19 @@ The core visualization is the Sasa Map: a canvas-based interface with two views 
 
 ## Current State
 
-**Tests:** 93 (90 pass, 3 skip)
-**Sprints completed:** 1 (Backend Foundation + Data Pipeline)
+**Tests:** 123 (118–119 pass, 2–3 skip)
+**Sprints completed:** 2 (Backend Foundation + Data Pipeline; Frontend Migration)
 **Active sprint:** None
 **Production URL:** https://web-production-0aa47.up.railway.app
 **Database:** https://kngzaasfcbjccivuqbkt.supabase.co
 **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
-**Next sprint:** 2 (Frontend Migration)
-**Prototype:** sasa_zamani_v3.html exists with mocked data — migration target for Sprint 2
+**Next sprint:** 3 (Integration Testing + Edge City Demo Prep)
 
 ## Architecture
 
 Three-tier: static HTML/JS/Canvas frontend → Python/FastAPI backend (Railway) → Supabase (Postgres + pgvector).
 
-Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching.
+Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching (app/myth.py). Frontend fetches live data from /events and /clusters endpoints. Participant color encoding and individual/collective toggle implemented.
 
 See docs/architecture.md for full system diagram, database schema, API endpoints, and file structure.
 
@@ -55,6 +54,7 @@ Python 3.11.8 (local) / 3.13.12 (Railway) · FastAPI · Supabase (Postgres 15 + 
 | DEC-011 | Seed clusters, dynamic deferred | Confirmed Sprint 1 |
 | DEC-012 | Raw JSON webhook over python-telegram-bot | Active |
 | DEC-013 | In-memory dedup for Telegram updates | Active |
+| DEC-014 | Lift do-not-modify constraint on telegram.py/granola.py | Active |
 
 See docs/decision-log.md for full rationale, alternatives rejected, and cross-references.
 

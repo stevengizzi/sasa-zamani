@@ -1,7 +1,7 @@
 # Roadmap
 
 > Strategic vision and sprint queue.
-> Last updated: 2026-03-18
+> Last updated: 2026-03-19
 
 ## Vision
 
@@ -40,18 +40,26 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 - CLUSTER_JOIN_THRESHOLD=0.3 calibrated
 - RSK-001 downgraded High → Low
 
-### Sprint 2 — Frontend Migration
-**Scope:** Migrate the Sasa Map frontend from mocked data to live API data. Replace hardcoded event arrays with fetch calls to /events and /clusters. Preserve both views, the animated transition, panel system, and chained navigation. Add collective/individual toggle. Add participant color encoding.
+### Sprint 2 — Frontend Migration ✓
+**Status:** Complete (9 sessions, tests 93 → 123)
 
-**Deliverables:**
-- Frontend fetches from backend API instead of hardcoded data
-- Strata view works with real data
-- Resonance view works with real data
-- Animated view transition preserved
-- Event panel and archetype panel work with real data
-- Chained navigation works
-- Individual/collective toggle functional
-- Participant colors (Jessie purple, Emma coral, Steven teal, shared gold)
+**Delivered:**
+- Frontend migrated from hardcoded data to async API fetches (`/events`, `/clusters`)
+- Strata and resonance views working with real data, animated transition preserved
+- Event and archetype detail panels with chained navigation (stopPropagation fix)
+- Individual/collective toggle with participant color encoding and opacity fade
+- Myth generation module (`app/myth.py`) with PROHIBITED_WORDS enforcement
+- `/myth` POST endpoint wired
+- compute_xs and event_count wired into Telegram and Granola pipelines (DEC-014)
+- New files: `scripts/__init__.py`, `scripts/backfill_xs.py`, `tests/test_myth.py`
+
+**Sprint 2 deferred items that may affect Sprint 3 scope:**
+- Telegram webhook not delivering events — infrastructure config issue (not code bug)
+- The Gate (0.12) and The Silence (0.15) xs overlap at low density — design review with Jessie
+- Esc key hotkey for closing slide-out panel
+- Participant toggle fade should animate smoothly rather than snap instantly
+- Archetype panel lacks clickable event items for reverse chaining (archetype→event navigation)
+- DEF-016: seed_clusters.py does not populate glyph_id column
 
 ### Sprint 3 — Integration Testing + Edge City Demo Prep
 **Scope:** End-to-end testing with real usage. All three participants using the Telegram bot for 2-3 days. Upload at least one Granola transcript. Tune JOIN_SIM threshold. Prompt engineering for myth quality. Bug fixes. Performance tuning.
@@ -91,6 +99,7 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 | DEF-013 | In-memory Telegram dedup set grows unbounded | Sprint 2+ | Needs LRU or periodic clear |
 | DEF-014 | process_granola_upload returns cluster_id as cluster_name | Sprint 2+ | Minor spec deviation |
 | DEF-015 | Privacy flag (AI-readable, participant-hidden) | Phase 4 | Trust-based for three collaborators |
+| DEF-016 | seed_clusters.py does not populate glyph_id column | Sprint 3+ | Manual DB fix applied; script fix needed for future re-seeds |
 
 ## Fast-Follow Feature Ideas
 
