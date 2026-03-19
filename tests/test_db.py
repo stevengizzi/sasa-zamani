@@ -169,6 +169,43 @@ async def test_get_events_returns_empty_list(mock_supabase):
     assert events == []
 
 
+async def test_insert_event_with_event_date(mock_supabase):
+    fake_event = {"id": "evt-date", "label": "dated", "event_date": "2025-03-17"}
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    insert_event(
+        label="dated",
+        note="test",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="granola",
+        event_date="2025-03-17",
+    )
+
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert data_dict["event_date"] == "2025-03-17"
+
+
+async def test_insert_event_without_event_date(mock_supabase):
+    fake_event = {"id": "evt-nodate", "label": "undated", "event_date": None}
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    insert_event(
+        label="undated",
+        note="test",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="telegram",
+    )
+
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert "event_date" not in data_dict
+
+
 # --- insert_cluster / get_clusters ---
 
 

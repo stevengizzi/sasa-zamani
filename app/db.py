@@ -60,6 +60,7 @@ def insert_event(
     source: str,
     cluster_id: str | None = None,
     xs: float | None = None,
+    event_date: str | None = None,
 ) -> dict:
     """Insert a new event and return the inserted row."""
     data: dict = {
@@ -73,6 +74,8 @@ def insert_event(
         data["cluster_id"] = cluster_id
     if xs is not None:
         data["xs"] = xs
+    if event_date is not None:
+        data["event_date"] = event_date
     response = get_db().table("events").insert(data).execute()
     return response.data[0]
 

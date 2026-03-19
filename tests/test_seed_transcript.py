@@ -72,6 +72,7 @@ def test_dry_run_no_api_calls(mock_embed, mock_insert, tmp_path):
     main([
         "--file", str(transcript_file),
         "--speaker-map", '{"Speaker A": "steven"}',
+        "--date", "2025-03-17",
         "--dry-run",
     ])
     assert mock_embed.call_count == 0
@@ -93,6 +94,7 @@ def test_end_to_end_mock_pipeline(
     main([
         "--file", str(transcript_file),
         "--speaker-map", '{"Speaker A": "steven", "Speaker B": "emma", "Speaker C": "jessie"}',
+        "--date", "2025-03-17",
         "--min-length", "100",
     ])
 
@@ -128,9 +130,37 @@ def test_embedding_error_skips_segment(
     main([
         "--file", str(transcript_file),
         "--speaker-map", '{"Speaker A": "steven", "Speaker B": "emma"}',
+        "--date", "2025-03-17",
         "--min-length", "50",
     ])
 
     # First segment fails embedding, second succeeds → 1 insert
     assert mock_embed.call_count == 2
     assert mock_insert.call_count == 1
+
+
+@patch("scripts.seed_transcript.update_event_xs")
+@patch("scripts.seed_transcript.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("scripts.seed_transcript.increment_event_count")
+@patch("scripts.seed_transcript.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("scripts.seed_transcript.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("scripts.seed_transcript.embed_text", return_value=FAKE_EMBEDDING)
+def test_date_arg_passed_to_insert(
+    mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs, tmp_path
+):
+    """--date value is forwarded to insert_event as event_date."""
+    transcript_file = tmp_path / "transcript.md"
+    transcript_file.write_text(
+        "Speaker A: A segment that is long enough to pass the minimum length"
+        " filter threshold of one hundred characters for testing purposes.\n"
+    )
+
+    main([
+        "--file", str(transcript_file),
+        "--speaker-map", '{"Speaker A": "steven"}',
+        "--date", "2025-03-17",
+        "--min-length", "50",
+    ])
+
+    assert mock_insert.call_count == 1
+    assert mock_insert.call_args.kwargs["event_date"] == "2025-03-17"

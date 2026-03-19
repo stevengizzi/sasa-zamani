@@ -14,12 +14,14 @@ Usage examples:
     # March 17 — live
     python -m scripts.seed_transcript \\
       --file docs/source/3-17-granola-transcript.md \\
-      --speaker-map '{"Speaker A": "steven", "Speaker B": "emma", "Speaker C": "jessie"}'
+      --speaker-map '{"Speaker A": "steven", "Speaker B": "emma", "Speaker C": "jessie"}' \\
+      --date 2025-03-17
 
     # March 18 — live
     python -m scripts.seed_transcript \\
       --file docs/source/3-18-granola-transcript.md \\
-      --speaker-map '{"Speaker B": "emma", "Speaker C": "jessie", "Speaker F": "steven"}'
+      --speaker-map '{"Speaker B": "emma", "Speaker C": "jessie", "Speaker F": "steven"}' \\
+      --date 2025-03-18
 
     Note: March 18 unmapped speakers (A, D, E, G, H, I) default to "shared".
 """
@@ -67,6 +69,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=100,
         help="Minimum segment character length (default: 100)",
+    )
+    parser.add_argument(
+        "--date",
+        required=True,
+        help="Event date in YYYY-MM-DD format (stored as event_date)",
     )
     parser.add_argument(
         "--dry-run",
@@ -136,7 +143,7 @@ def print_dry_run(
         print(f"  [{i}] ({segment['participant']}) {preview}")
 
 
-def run_pipeline(segments: list[dict[str, str]]) -> None:
+def run_pipeline(segments: list[dict[str, str]], event_date: str | None = None) -> None:
     """Run each segment through embed → assign → insert → increment → xs pipeline."""
     total = len(segments)
     inserted = 0
@@ -167,6 +174,7 @@ def run_pipeline(segments: list[dict[str, str]]) -> None:
                 embedding=embedding,
                 source="granola",
                 cluster_id=cluster_id,
+                event_date=event_date,
             )
         except Exception as exc:
             logger.error("DB insert failed for segment %d: %s", i, exc)
@@ -227,7 +235,7 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     logging.basicConfig(level=logging.INFO)
-    run_pipeline(filtered_segments)
+    run_pipeline(filtered_segments, event_date=args.date)
 
 
 if __name__ == "__main__":
