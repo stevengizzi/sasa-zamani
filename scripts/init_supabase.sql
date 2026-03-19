@@ -1,7 +1,17 @@
 -- Enable pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Clusters table (created first because events references it)
+-- Raw inputs table (created before events, which references it)
+CREATE TABLE raw_inputs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  text TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON raw_inputs (source);
+
+-- Clusters table (created before events, which references it)
 CREATE TABLE clusters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -27,7 +37,10 @@ CREATE TABLE events (
   cluster_id UUID REFERENCES clusters(id),
   xs FLOAT,
   day INTEGER,
-  participants JSONB DEFAULT '[]'
+  participants JSONB DEFAULT '[]',
+  raw_input_id UUID REFERENCES raw_inputs(id),
+  start_line INTEGER,
+  end_line INTEGER
 );
 
 -- Myths history

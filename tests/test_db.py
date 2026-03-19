@@ -10,9 +10,11 @@ from app.db import (
     get_cluster_centroids,
     get_clusters,
     get_events,
+    get_raw_input,
     increment_event_count,
     insert_cluster,
     insert_event,
+    insert_raw_input,
     reset_client,
 )
 
@@ -404,3 +406,133 @@ async def test_event_response_includes_participants():
     )
     data = event.model_dump()
     assert data["participants"] == ["steven", "emma"]
+
+
+# --- insert_raw_input / get_raw_input ---
+
+
+async def test_insert_raw_input_returns_full_row(mock_supabase):
+    fake_row = {
+        "id": "ri-1",
+        "text": "full transcript text",
+        "source": "granola",
+        "source_metadata": {"filename": "session.md"},
+        "created_at": "2026-03-19T00:00:00Z",
+    }
+    insert_chain = _chain(mock_supabase, "raw_inputs").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_row])
+
+    result = insert_raw_input(
+        text="full transcript text",
+        source="granola",
+        source_metadata={"filename": "session.md"},
+    )
+    assert result["id"] == "ri-1"
+    assert result["text"] == "full transcript text"
+    assert result["source"] == "granola"
+    assert result["source_metadata"] == {"filename": "session.md"}
+    assert result["created_at"] == "2026-03-19T00:00:00Z"
+
+
+async def test_insert_raw_input_stores_source_metadata_as_jsonb(mock_supabase):
+    metadata = {"chat_id": 12345, "username": "steven"}
+    fake_row = {"id": "ri-2", "text": "msg", "source": "telegram", "source_metadata": metadata}
+    insert_chain = _chain(mock_supabase, "raw_inputs").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_row])
+
+    insert_raw_input(text="msg", source="telegram", source_metadata=metadata)
+
+    call_args = _chain(mock_supabase, "raw_inputs").insert.call_args
+    data_dict = call_args[0][0]
+    assert data_dict["source_metadata"] == metadata
+
+
+async def test_insert_raw_input_none_metadata_defaults_to_omitted(mock_supabase):
+    fake_row = {"id": "ri-3", "text": "msg", "source": "telegram", "source_metadata": {}}
+    insert_chain = _chain(mock_supabase, "raw_inputs").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_row])
+
+    insert_raw_input(text="msg", source="telegram")
+
+    call_args = _chain(mock_supabase, "raw_inputs").insert.call_args
+    data_dict = call_args[0][0]
+    assert "source_metadata" not in data_dict
+
+
+async def test_get_raw_input_returns_existing_row(mock_supabase):
+    fake_row = {"id": "ri-4", "text": "transcript", "source": "granola", "source_metadata": {}}
+    select_chain = _chain(mock_supabase, "raw_inputs").select.return_value
+    select_chain.eq.return_value = select_chain
+    select_chain.execute.return_value = MagicMock(data=[fake_row])
+
+    result = get_raw_input("ri-4")
+    assert result is not None
+    assert result["id"] == "ri-4"
+    assert result["text"] == "transcript"
+
+
+async def test_get_raw_input_returns_none_for_missing(mock_supabase):
+    select_chain = _chain(mock_supabase, "raw_inputs").select.return_value
+    select_chain.eq.return_value = select_chain
+    select_chain.execute.return_value = MagicMock(data=[])
+
+    result = get_raw_input("nonexistent-id")
+    assert result is None
+
+
+async def test_insert_event_with_raw_input_fields(mock_supabase):
+    fake_event = {
+        "id": "evt-ri",
+        "label": "segmented",
+        "raw_input_id": "ri-1",
+        "start_line": 10,
+        "end_line": 25,
+    }
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    result = insert_event(
+        label="segmented",
+        note="from transcript",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="granola",
+        raw_input_id="ri-1",
+        start_line=10,
+        end_line=25,
+    )
+    assert result["raw_input_id"] == "ri-1"
+    assert result["start_line"] == 10
+    assert result["end_line"] == 25
+
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert data_dict["raw_input_id"] == "ri-1"
+    assert data_dict["start_line"] == 10
+    assert data_dict["end_line"] == 25
+
+
+async def test_insert_event_without_raw_input_fields_backward_compat(mock_supabase):
+    fake_event = {"id": "evt-compat", "label": "old style"}
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    insert_event(
+        label="old style",
+        note="no raw input",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="telegram",
+    )
+
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert "raw_input_id" not in data_dict
+    assert "start_line" not in data_dict
+    assert "end_line" not in data_dict
+
+
+async def test_ensure_schema_probes_raw_inputs(mock_supabase):
+    ensure_schema()
+    table_calls = [call.args[0] for call in mock_supabase.table.call_args_list]
+    assert "raw_inputs" in table_calls
