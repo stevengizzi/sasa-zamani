@@ -5,8 +5,10 @@ from uuid import uuid4
 
 import pytest
 
+import app.telegram as telegram_module
 from app.telegram import (
     PARTICIPANT_MAP,
+    _DEDUP_CAP,
     _processed_update_ids,
     extract_message,
     is_duplicate,
@@ -33,11 +35,13 @@ def _make_update(text="hello world", username="jessie_tg", update_id=1001):
 def _clear_dedup_state():
     """Reset the in-memory dedup set and PARTICIPANT_MAP between tests."""
     _processed_update_ids.clear()
+    telegram_module._dedup_cap_warned = False
     original_map = dict(PARTICIPANT_MAP)
     PARTICIPANT_MAP.clear()
     yield
     PARTICIPANT_MAP.clear()
     PARTICIPANT_MAP.update(original_map)
+    telegram_module._dedup_cap_warned = False
 
 
 # --- extract_message ---
@@ -191,7 +195,7 @@ def test_process_skips_non_text():
 
 def test_process_skips_duplicate():
     update = _make_update(update_id=999)
-    _processed_update_ids.add(999)
+    _processed_update_ids[999] = None
     result = process_telegram_update(update)
     assert result["processed"] is False
     assert result["reason"] == "duplicate"
@@ -248,6 +252,39 @@ def test_process_embedding_failure(mock_embed):
     result = process_telegram_update(update)
     assert result["processed"] is False
     assert result["reason"] == "embedding_failed"
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.increment_event_count", side_effect=RuntimeError("RPC failed"))
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+def test_telegram_increment_failure_event_survives(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    update = _make_update(text="still works", update_id=890)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    assert result["event_id"] == FAKE_EVENT_ID
+    mock_insert.assert_called_once()
+
+
+# --- dedup cap (DEF-013) ---
+
+
+def test_dedup_set_cap_enforced():
+    for i in range(10_001):
+        is_duplicate(i)
+    assert len(_processed_update_ids) <= _DEDUP_CAP
+
+
+def test_dedup_set_oldest_evicted():
+    for i in range(1, 10_001):
+        is_duplicate(i)
+    assert len(_processed_update_ids) == _DEDUP_CAP
+    # Adding 10_001 should evict ID 1
+    is_duplicate(10_001)
+    assert is_duplicate(1) is False  # evicted, so not a duplicate
+    assert is_duplicate(10_000) is True  # still retained
 
 
 # --- POST /telegram endpoint ---

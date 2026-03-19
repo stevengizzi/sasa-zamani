@@ -1,6 +1,7 @@
 """Telegram webhook handler and message parsing."""
 
 import logging
+from collections import OrderedDict
 
 from app.clustering import assign_cluster, compute_xs
 from app.db import (
@@ -27,7 +28,9 @@ PARTICIPANT_MAP: dict[str, str] = {
     "Emma": "emma",
 }
 
-_processed_update_ids: set[int] = set()
+_DEDUP_CAP = 10_000
+_processed_update_ids: OrderedDict[int, None] = OrderedDict()
+_dedup_cap_warned: bool = False
 
 
 def extract_message(update: dict) -> tuple[str, str, int] | None:
@@ -72,14 +75,21 @@ def extract_message(update: dict) -> tuple[str, str, int] | None:
 
 
 def is_duplicate(update_id: int) -> bool:
-    """Check if this update_id has already been processed. Uses in-memory set for v1."""
+    """Check if this update_id has already been processed. Uses capped in-memory set for v1."""
+    global _dedup_cap_warned
     if not isinstance(update_id, int):
         raise TypeError(f"update_id must be an int, got {type(update_id).__name__}")
 
     if update_id in _processed_update_ids:
         return True
 
-    _processed_update_ids.add(update_id)
+    if len(_processed_update_ids) >= _DEDUP_CAP:
+        if not _dedup_cap_warned:
+            logger.warning("Dedup set reached cap of %d; evicting oldest entries", _DEDUP_CAP)
+            _dedup_cap_warned = True
+        _processed_update_ids.popitem(last=False)
+
+    _processed_update_ids[update_id] = None
     return False
 
 
@@ -126,14 +136,25 @@ def process_telegram_update(update: dict) -> dict:
             source="telegram",
             cluster_id=cluster_id,
         )
+    except Exception as exc:
+        logger.error("DB write failed for update_id=%s: %s", update_id, exc)
+        return {"processed": False, "reason": "db_failed", "event_id": None}
+
+    try:
         increment_event_count(cluster_id)
+    except Exception as exc:
+        logger.warning(
+            "increment_event_count failed for cluster %s after event %s was inserted: %s",
+            cluster_id, row.get("id"), exc,
+        )
+
+    try:
         cluster = get_cluster_by_id(cluster_id)
         if cluster is not None:
             event_count = cluster["event_count"]
             xs = compute_xs(cluster["name"], event_count - 1, event_count)
             update_event_xs(row["id"], xs)
     except Exception as exc:
-        logger.error("DB write failed for update_id=%s: %s", update_id, exc)
-        return {"processed": False, "reason": "db_failed", "event_id": None}
+        logger.warning("xs computation failed for event %s: %s", row.get("id"), exc)
 
     return {"processed": True, "reason": "ok", "event_id": row.get("id")}

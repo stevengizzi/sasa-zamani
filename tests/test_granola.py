@@ -137,3 +137,31 @@ def test_process_granola_empty_raises():
 def test_process_granola_embedding_failure_no_partial_write(mock_embed):
     with pytest.raises(EmbeddingError):
         process_granola_upload(SAMPLE_TRANSCRIPT)
+
+
+@patch("app.granola.update_event_xs")
+@patch("app.granola.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.granola.increment_event_count")
+@patch("app.granola.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.granola.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.granola.embed_text", return_value=FAKE_EMBEDDING)
+def test_granola_return_contract_cluster_name(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    results = process_granola_upload(SAMPLE_TRANSCRIPT)
+    for result in results:
+        # cluster_name must be a human-readable string, not a UUID
+        assert result["cluster_name"] == "The Gate"
+        assert "-" not in result["cluster_name"] or len(result["cluster_name"]) != 36
+
+
+@patch("app.granola.update_event_xs")
+@patch("app.granola.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.granola.increment_event_count", side_effect=RuntimeError("RPC failed"))
+@patch("app.granola.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.granola.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.granola.embed_text", return_value=FAKE_EMBEDDING)
+def test_granola_increment_failure_event_survives(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    results = process_granola_upload(SAMPLE_TRANSCRIPT)
+    assert len(results) == 3
+    for result in results:
+        assert result["event_id"] == FAKE_EVENT_ID
+        assert result["cluster_name"] == "The Gate"
