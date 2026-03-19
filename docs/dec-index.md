@@ -24,3 +24,7 @@
 | DEC-018 | 2026-03-19 | 3.5 | Thematic segmentation for batch and live Granola pipelines | Active |
 | DEC-019 | 2026-03-19 | 3.5 | Combined segmentation + label in single Claude call | Active |
 | DEC-020 | 2026-03-19 | 3.5 | Boundary-based segmentation output (line numbers, not text) | Active |
+| DEC-021 | 2026-03-20 | 4 | Significance filtering in both pipelines (threshold 0.3) | Active |
+| DEC-022 | 2026-03-20 | 4 | raw_inputs table for all incoming data | Active |
+| DEC-023 | 2026-03-20 | 4 | Deferred archetype naming ("The Unnamed" until threshold) | Active |
+| DEC-024 | 2026-03-20 | 4 | Post-processing label dedup with ordinal suffixes | Active |

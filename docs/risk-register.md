@@ -171,3 +171,26 @@ Steven is the sole developer. If Steven is unavailable, development stops. Jessi
 
 **Owner:** Steven
 **Related:** DEC-008
+
+---
+
+**RSK-009:** Cluster concentration when seed archetypes don't match incoming content type
+**Date:** 2026-03-20
+**Severity:** Medium
+**Likelihood:** Medium
+
+**Risk:**
+Seed archetypes (The Gate, What the Body Keeps, The Table, The Silence, The Root, The Hand) were designed for personal lived-experience events (Telegram messages about daily life). When the input is intellectual discussion (e.g., Granola transcripts of philosophical conversations), most events fall below the join threshold for all seed clusters and concentrate in a single dynamic cluster. Sprint 4 re-seed: 28/29 events from 2 Granola transcripts assigned to one dynamic cluster ("The Argot").
+
+**Sprint 4 Observation:**
+- After significance filtering reduced the event count from 48 to 29, nearly all remaining events (intellectual discussion content) were assigned to a single dynamic cluster
+- Seed archetypes cover experiential domains (dream, body, food, silence, memory, writing) but not cognitive/dialogical domains (argument, inquiry, conceptual exploration)
+- This is not a failure of the clustering pipeline — the embeddings and similarity math are working correctly — but a mismatch between seed archetype coverage and input content type
+
+**Mitigation:**
+1. Expand seed archetypes to cover intellectual/discussion content (e.g., "The Argument," "The Inquiry," "The Forge"). Requires team input on which archetypes to add.
+2. Accept that dynamic clustering will handle content types that seeds don't cover — this is the designed fallback path (DEC-011, DEC-023).
+3. Monitor cluster distribution after each re-seed or significant data addition.
+
+**Owner:** Steven (implementation), Jessie + Emma (archetype design)
+**Related:** DEC-011, DEC-023, RSK-001

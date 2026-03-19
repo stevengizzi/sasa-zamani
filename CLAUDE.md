@@ -1,18 +1,18 @@
 # Sasa/Zamani — Claude Code Context
 
 > Dense, actionable context for Claude Code sessions.
-> Last updated: 2026-03-19
+> Last updated: 2026-03-20
 
 ## Active Sprint
 
-**No active sprint.** Sprint 3.5 complete. Sprint 4 ready to plan.
+**No active sprint.** Sprint 4 complete. Sprint 5 ready to plan.
 
 ## Current State
 
-- **Sprints completed:** 3.5 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep; Thematic Segmentation + LLM Labels)
+- **Sprints completed:** 4 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep; Thematic Segmentation + LLM Labels; Data Quality + Significance Filtering)
 - **Active sprint:** None
-- **Next sprint:** 4 (Data Quality + Significance Filtering)
-- **Tests:** 166 (166 pass, 0 skip)
+- **Next sprint:** 5 (Design Brief Alignment)
+- **Tests:** 237 (237 pass, 0 skip)
 - **Infrastructure:** Railway: web-production-0aa47.up.railway.app | Supabase: kngzaasfcbjccivuqbkt.supabase.co | Telegram bot: webhook active at /telegram
 - **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
 
@@ -41,10 +41,11 @@ sasa-zamani/
 │   ├── main.py              # FastAPI app, routes, startup
 │   ├── config.py            # Centralized configuration
 │   ├── embedding.py         # OpenAI embedding calls
-│   ├── clustering.py        # Cluster assignment, centroids, seeds
+│   ├── clustering.py        # Cluster assignment, centroids, seeds, dynamic creation
 │   ├── telegram.py          # Telegram webhook handler
 │   ├── granola.py           # Granola transcript parser (thematic segmentation)
-│   ├── segmentation.py      # Thematic segmentation engine + label generation
+│   ├── segmentation.py      # Thematic segmentation engine + label generation + significance
+│   ├── archetype_naming.py  # Deferred archetype naming for dynamic clusters
 │   ├── myth.py              # Claude API proxy, caching
 │   ├── models.py            # Pydantic models
 │   └── db.py                # Supabase client
@@ -63,6 +64,7 @@ sasa-zamani/
 │   ├── test_myth.py         # Myth generation tests
 │   ├── test_seed_transcript.py # Seed transcript pipeline tests
 │   ├── test_segmentation.py # Segmentation engine tests
+│   ├── test_archetype_naming.py # Archetype naming tests
 │   ├── test_backfill_labels.py # Backfill labels script tests
 │   └── test_integration.py  # End-to-end integration tests
 ├── scripts/
@@ -73,7 +75,9 @@ sasa-zamani/
 │   ├── centroid_matrix.py   # Compute centroid similarity matrix
 │   ├── cluster_sanity.py    # Validate cluster assignment quality
 │   ├── backfill_labels.py   # Retroactive LLM label generation for existing events
-│   └── test_myth_quality.py # Manual myth quality evaluation (not collected by pytest)
+│   ├── test_myth_quality.py # Manual myth quality evaluation (not collected by pytest)
+│   ├── migrate_sprint4.sql  # Sprint 4 schema migration
+│   └── init_supabase.sql    # Full schema DDL
 ├── requirements.txt
 ├── pyproject.toml           # pytest config, marker registration
 ├── Procfile                 # Railway: web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -90,6 +94,8 @@ TELEGRAM_BOT_TOKEN=
 SUPABASE_URL=
 SUPABASE_KEY=
 CLUSTER_JOIN_THRESHOLD=0.3
+SIGNIFICANCE_THRESHOLD=0.3
+ARCHETYPE_NAMING_THRESHOLD=3
 ```
 
 ## API Endpoints
@@ -106,7 +112,7 @@ CLUSTER_JOIN_THRESHOLD=0.3
 
 ## Database Schema (Supabase)
 
-Three tables: `events` (id, label, note, participant, source, embedding vector(1536), cluster_id, xs, created_at, event_date, participants jsonb), `clusters` (id, name, glyph_id, centroid vector(1536), myth_text, event_count, is_seed), `myths` (cluster_id, text, version, generated_at). pgvector extension enabled. See docs/architecture.md for full DDL.
+Four tables: `events` (id, label, note, participant, source, embedding vector(1536), cluster_id, xs, created_at, event_date, participants jsonb, raw_input_id FK, start_line, end_line), `clusters` (id, name, glyph_id, centroid vector(1536), myth_text, event_count, is_seed), `myths` (cluster_id, text, version, generated_at), `raw_inputs` (id, text, source, source_metadata jsonb, created_at). pgvector extension enabled. See docs/architecture.md for full DDL.
 
 ## Key Decisions
 
@@ -125,6 +131,10 @@ Three tables: `events` (id, label, note, participant, source, embedding vector(1
 - DEC-018: Thematic segmentation for batch and live Granola pipelines
 - DEC-019: Combined segmentation + label in single Claude call
 - DEC-020: Boundary-based segmentation output (line numbers, not text)
+- DEC-021: Significance filtering in both pipelines (threshold 0.3)
+- DEC-022: raw_inputs table for all incoming data
+- DEC-023: Deferred archetype naming ("The Unnamed" until threshold)
+- DEC-024: Post-processing label dedup with ordinal suffixes
 
 ## Language Constraints
 
@@ -136,4 +146,4 @@ Jessie: #7F77DD · Emma: #D85A30 · Steven: #1D9E75 · Shared: #BA7517
 
 ## Deferred Items
 
-Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 3 carry-forwards: DEF-017 (myth post-validation), DEF-018 (transcript dedup). Sprint 3.5 carry-forwards: DEF-020 (per-participant attribution for multi-speaker events), DEF-021 (10,243-char segment truncation investigation).
+Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 3 carry-forwards: DEF-017 (myth post-validation), DEF-018 (transcript dedup). Sprint 3.5 carry-forwards: DEF-020 (per-participant attribution for multi-speaker events). Sprint 4 carry-forwards: DEF-022 (single-event cluster node unclickable in frontend — The Root), DEF-023 (strata view bottom margin overlaps navigation toggles), seed archetype expansion for discussion content, backfill_labels.py tuple return update needed.

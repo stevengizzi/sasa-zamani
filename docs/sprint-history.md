@@ -8,6 +8,7 @@
 | 2 | Frontend Migration | 93 → 123 (118–119 pass, 2–3 skip) | 2026-03-19 | DEC-014 |
 | 3 | Integration Testing + Edge City Demo Prep | 125 → 147 (144 pass, 3 skip) | 2026-03-19 | DEC-015, DEC-016 |
 | 3.5 | Thematic Segmentation + LLM Labels | 147 → 166 (166 pass, 0 skip) | 2026-03-19 | DEC-017, DEC-018, DEC-019, DEC-020 |
+| 4 | Data Quality + Significance Filtering | 166 → 237 (237 pass, 0 skip) | 2026-03-20 | DEC-021, DEC-022, DEC-023, DEC-024 |
 
 ---
 
@@ -166,3 +167,46 @@
 - S3 interrupted and restarted when Claude Code modified segmentation.py out of scope; backfill preserved, segmentation reverted, fix sessions ran, then S3 re-seed completed
 
 **Review verdicts:** S1a PASS, S1b PASS, S2a PASS, S2b PASS, F1 PASS, F2 PASS, S3 PASS
+
+---
+
+## Sprint 4 — Data Quality + Significance Filtering
+
+**Goal:** Improve data quality across both ingestion pipelines: significance filtering, raw_input storage, marginalia labels, label dedup, below-threshold archetype creation, and DEF-021 truncation fix.
+
+**Sessions:** S1 (Segmentation Core), S2 (DB Schema + Layer), S3 (Archetype Creation Core), S3-fix (Prohibited Words), S4a (Granola Pipeline Integration), S4b (Seed Script Integration), S5 (Telegram Pipeline Integration), S6 (DEF-021 Fix + Re-seed + Verification) — 8 sessions
+
+**Test delta:** 166 → 237 (+71 new tests)
+
+**Key outcomes:**
+- Significance filtering in both pipelines: `generate_event_label()` returns `tuple[str, float]`, `filter_by_significance()` gates event creation at configurable threshold (default 0.3, DEC-021)
+- `raw_inputs` table stores all incoming data with FK from events (`raw_input_id`, `start_line`, `end_line`) for traceability (DEC-022)
+- Dynamic cluster creation with deferred archetype naming: "The Unnamed" placeholder until `event_count` reaches `archetype_naming_threshold` (default 3), then Claude generates name via `maybe_name_cluster()` in new `app/archetype_naming.py` module (DEC-023)
+- Post-processing label dedup: `dedup_labels()` appends ordinal suffixes "(II)", "(III)" for duplicate labels within a transcript (DEC-024)
+- DEF-021 truncation fix: `max_tokens` increased 4096→16384 in segmentation, `stop_reason` guard added, shared-boundary tolerance for adjacent segments
+- Granola pipeline rewritten: store raw → segment → dedup → filter → embed → assign/create → insert → increment → name → xs
+- Seed script pipeline updated to mirror Granola pattern; `filter_by_length` removed, replaced by significance filtering; `--min-length` CLI arg removed
+- Telegram pipeline reordered: dedup → label+sig → raw_input → significance filter → embed → assign/create → insert → increment → name → xs
+- Production re-seeded: 29 events across 7 clusters (6 seed + 1 dynamic "The Argot") from 2 Granola transcripts
+- New files: `app/archetype_naming.py`, `tests/test_archetype_naming.py`, `scripts/migrate_sprint4.sql`
+- Modified files: `app/config.py`, `app/segmentation.py`, `app/clustering.py`, `app/db.py`, `app/granola.py`, `app/telegram.py`, `scripts/seed_transcript.py`, `scripts/init_supabase.sql`, plus 6 test files
+
+**Issues resolved during sprint:**
+- S3 review: 5 prohibited words missing from archetype naming prompt → fixed in S3-fix (34890db)
+- S4a review: test_seed_transcript.py import error (filter_by_length removed) → resolved by S4b
+- S4a review: test_telegram.py 2 test failures (tuple mock) → resolved by S5
+- DEF-021: max_tokens 4096→16384 + stop_reason guard; re-seed confirms no truncation (S6)
+
+**Carry-forwards:**
+- DEF-022: Single-event cluster node unclickable in frontend (The Root)
+- DEF-023: Strata view bottom margin overlaps navigation toggles
+- Seed archetype expansion needed — 28/29 re-seeded events concentrated in one dynamic cluster ("The Argot"); seed archetypes designed for personal experience, not intellectual discussion
+- `backfill_labels.py` needs updating to handle tuple return from `generate_event_label()`
+- Unused `call` import in `tests/test_granola.py:3` (cosmetic)
+- Redundant exception clause `except (SegmentationError, Exception)` in `app/telegram.py:116` (pre-existing)
+- Integration test FK teardown error in TestSeedClustersIntegration (pre-existing)
+
+**Scope changes:**
+- S6: Shared-boundary tolerance for adjacent segments (March 18 transcript triggered overlap error where Claude returned start_line == prev_end_line)
+
+**Review verdicts:** S1 CONCERNS (resolved — false positives + by-design), S2 CLEAR, S3 CONCERNS (resolved — S3-fix applied), S4a CLEAR, S4b CLEAR, S5 CLEAR, S6 CLEAR

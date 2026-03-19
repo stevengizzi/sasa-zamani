@@ -1,7 +1,7 @@
 # Roadmap
 
 > Strategic vision and sprint queue.
-> Last updated: 2026-03-19
+> Last updated: 2026-03-20
 
 ## Vision
 
@@ -87,11 +87,27 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 - Backfill script (`scripts/backfill_labels.py`) for retroactive label generation
 - New files: `app/segmentation.py`, `scripts/backfill_labels.py`, `tests/test_segmentation.py`, `tests/test_backfill_labels.py`
 
-### Sprint 4 — Data Quality + Significance Filtering
-**Scope:** Significance filtering for segmentation (score-based threshold), transcript storage table with FK from events, label prompt redesign for marginalia register, duplicate label defense, below-threshold new archetype creation (implement DEC-011 designed-but-unbuilt path), 10,243-char truncation investigation (DEF-021).
+### Sprint 4 — Data Quality + Significance Filtering ✓
+**Status:** Complete (8 sessions, tests 166 → 237)
+
+**Delivered:**
+- Significance filtering in both pipelines: LLM-assessed score gates event creation at threshold 0.3 (DEC-021)
+- `raw_inputs` table stores all incoming data with FK traceability from events (DEC-022)
+- Dynamic cluster creation with deferred archetype naming via `app/archetype_naming.py` (DEC-023)
+- Post-processing label dedup with ordinal suffixes "(II)", "(III)" (DEC-024)
+- DEF-021 truncation fix: max_tokens 4096→16384, stop_reason guard, shared-boundary tolerance
+- All three pipelines (Granola, seed script, Telegram) rewritten with full data quality stack
+- Production re-seeded: 29 events across 7 clusters (6 seed + 1 dynamic "The Argot")
+- New files: `app/archetype_naming.py`, `tests/test_archetype_naming.py`, `scripts/migrate_sprint4.sql`
+
+**Carry-forwards:**
+- DEF-022: Single-event cluster node unclickable in frontend (The Root)
+- DEF-023: Strata view bottom margin overlaps navigation toggles
+- Seed archetype expansion for discussion content (28/29 events in single dynamic cluster)
+- `backfill_labels.py` needs tuple return handling for `generate_event_label()`
 
 ### Sprint 5 — Design Brief Alignment (Phase 2)
-**Scope:** Visual polish. Implement the Design Brief's aesthetic: Cormorant Garamond / DM Mono typography, river-at-night color palette (#0e0c09 void, #c49a3a gold, #8a8aaa violet-slate), grain overlay, blur and atmosphere, the layering rules. Scroll/zoom/pan on both views.
+**Scope:** Visual polish. Implement the Design Brief's aesthetic: Cormorant Garamond / DM Mono typography, river-at-night color palette (#0e0c09 void, #c49a3a gold, #8a8aaa violet-slate), grain overlay, blur and atmosphere, the layering rules. Scroll/zoom/pan on both views. Candidates from Sprint 4: DEF-022 (single-event cluster node click), DEF-023 (strata view bottom margin), seed archetype expansion for discussion content.
 
 ### Sprint 6 — Zamani View + Scroll/Zoom (Phase 2)
 **Scope:** Build the third view (zamani): force-directed archetype-level field with truth threads between related archetypes. Implement scroll/zoom/pan across all views. Mobile layout optimization.
@@ -117,7 +133,9 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 | DEF-018 | Transcript dedup | Sprint 4+ | Prevent re-seeding same transcript |
 | ~~DEF-019~~ | ~~LLM-generated event labels~~ | ~~Sprint 4+~~ | **RESOLVED** Sprint 3.5 — implemented via `generate_event_label()` in segmentation.py |
 | DEF-020 | Per-participant attribution for multi-speaker Granola events | Phase 4 | Currently all set to participant="shared"; segmentation returns speaker lists but pipeline doesn't attribute individually |
-| DEF-021 | 10,243-char segment truncation | Sprint 4 | Three segments hit exactly this length and are cut mid-sentence; pipeline limit needs investigation |
+| ~~DEF-021~~ | ~~10,243-char segment truncation~~ | ~~Sprint 4~~ | **RESOLVED** Sprint 4 — max_tokens 4096→16384, stop_reason guard, shared-boundary tolerance |
+| DEF-022 | Single-event cluster node unclickable in frontend (The Root) | Sprint 5 | Frontend click handler issue for clusters with event_count=1 |
+| DEF-023 | Strata view bottom margin overlaps navigation toggles | Sprint 5 | Events and archetype labels overlap the strata/resonance and participant filter bars |
 
 ## Fast-Follow Feature Ideas
 

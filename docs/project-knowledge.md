@@ -1,7 +1,7 @@
 # Project Knowledge — Sasa/Zamani
 
 > Tier A operational context for Claude.ai and Claude Code.
-> Last updated: 2026-03-19
+> Last updated: 2026-03-20
 
 ## What Is This Project
 
@@ -17,20 +17,20 @@ The core visualization is the Sasa Map: a canvas-based interface with two views 
 
 ## Current State
 
-**Tests:** 166 (166 pass, 0 skip)
-**Sprints completed:** 3.5 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep; Thematic Segmentation + LLM Labels)
+**Tests:** 237 (237 pass, 0 skip)
+**Sprints completed:** 4 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep; Thematic Segmentation + LLM Labels; Data Quality + Significance Filtering)
 **Active sprint:** None
 **Production URL:** https://web-production-0aa47.up.railway.app
 **Database:** https://kngzaasfcbjccivuqbkt.supabase.co
 **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
-**Seeded data:** 48 events (46 granola, 2 telegram) across 6 clusters from 2 Granola transcripts (thematically segmented)
-**Next sprint:** 4 (Data Quality + Significance Filtering)
+**Seeded data:** 29 events across 7 clusters (6 seed + 1 dynamic "The Argot") from 2 Granola transcripts (thematically segmented, significance-filtered)
+**Next sprint:** 5 (Design Brief Alignment)
 
 ## Architecture
 
 Three-tier: static HTML/JS/Canvas frontend → Python/FastAPI backend (Railway) → Supabase (Postgres + pgvector).
 
-Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching (app/myth.py). Thematic segmentation: `app/segmentation.py` — Claude-powered transcript segmentation using line-boundary output (DEC-020) with combined label generation (DEC-019). Frontend fetches live data from /events and /clusters endpoints. Participant color encoding and individual/collective toggle implemented.
+Input sources: Telegram bot webhook + Granola transcript upload. All incoming data stored in `raw_inputs` table before processing (DEC-022). Thematic segmentation: `app/segmentation.py` — Claude-powered transcript segmentation using line-boundary output (DEC-020) with combined label + significance scoring (DEC-019, DEC-021). Significance filtering gates event creation at configurable threshold (default 0.3). Label dedup appends ordinal suffixes for duplicate labels within a transcript (DEC-024). Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Below-threshold events create dynamic clusters with deferred archetype naming via `app/archetype_naming.py` (DEC-023). Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching (app/myth.py). Frontend fetches live data from /events and /clusters endpoints. Participant color encoding and individual/collective toggle implemented.
 
 See docs/architecture.md for full system diagram, database schema, API endpoints, and file structure.
 
@@ -62,6 +62,10 @@ Python 3.11.8 (local) / 3.13.12 (Railway) · FastAPI · Supabase (Postgres 15 + 
 | DEC-018 | Thematic segmentation for batch and live Granola pipelines | Active |
 | DEC-019 | Combined segmentation + label in single Claude call | Active |
 | DEC-020 | Boundary-based segmentation output (line numbers, not text) | Active |
+| DEC-021 | Significance filtering in both pipelines (threshold 0.3) | Active |
+| DEC-022 | raw_inputs table for all incoming data | Active |
+| DEC-023 | Deferred archetype naming ("The Unnamed" until threshold) | Active |
+| DEC-024 | Post-processing label dedup with ordinal suffixes | Active |
 
 See docs/decision-log.md for full rationale, alternatives rejected, and cross-references.
 
@@ -74,6 +78,7 @@ See docs/decision-log.md for full rationale, alternatives rejected, and cross-re
 | RSK-003 | No day-2 retention mechanism (habit loop) | High |
 | RSK-004 | Frontend rebuild scope creep | Medium |
 | RSK-007 | Philosophical coherence under implementation pressure | Medium |
+| RSK-009 | Cluster concentration when seed archetypes don't match content type | Medium |
 
 See docs/risk-register.md for full mitigations.
 

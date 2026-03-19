@@ -1,7 +1,7 @@
 # Architecture
 
 > Technical blueprint. How the system is built.
-> Last updated: 2026-03-19
+> Last updated: 2026-03-20
 
 ## Overview
 
@@ -42,8 +42,12 @@ The architecture is a classic three-tier web application: a canvas-based fronten
 ┌─────────────────────────────────────────────────────────┐
 │              SUPABASE (Postgres + pgvector)              │
 │                                                         │
+│  raw_inputs: id, text, source, source_metadata,         │
+│             created_at                                   │
+│                                                         │
 │  events: id, label, note, participant, embedding,       │
-│          cluster_id, xs, created_at, event_date, source             │
+│          cluster_id, xs, created_at, event_date, source,│
+│          raw_input_id FK, start_line, end_line           │
 │                                                         │
 │  clusters: id, name, myth_text, centroid,                │
 │            event_count, last_updated, is_seed            │
@@ -78,18 +82,19 @@ Python application handling all server-side logic. Responsibilities: Telegram we
 
 Key backend files (v1):
 - `app/main.py` — FastAPI app, route definitions, startup
-- `app/config.py` — Centralized configuration (env vars, thresholds)
+- `app/config.py` — Centralized configuration (env vars, thresholds including `significance_threshold`, `archetype_naming_threshold`)
 - `app/embedding.py` — OpenAI embedding calls, similarity math
-- `app/clustering.py` — cluster assignment, centroid management, seed cluster definitions
+- `app/clustering.py` — cluster assignment, centroid management, seed cluster definitions, `assign_or_create_cluster()` (assigns to best-fit cluster or creates a dynamic cluster), `create_dynamic_cluster()` (creates an unnamed dynamic cluster with `is_seed=False`)
 - `app/telegram.py` — Telegram webhook handler, raw JSON parsing (DEC-012)
 - `app/granola.py` — Granola transcript parser (calls `segment_transcript()` for thematic segmentation, DEC-018)
-- `app/segmentation.py` — Thematic segmentation engine: `Segment` dataclass, `segment_transcript()` (boundary-based prompt with line-numbered transcript, single Claude call per transcript, DEC-019/DEC-020), `generate_event_label()` (standalone label generation for Telegram events), `_create_client()` helper with `timeout=120.0`. Model: claude-sonnet-4-20250514
+- `app/segmentation.py` — Thematic segmentation engine: `Segment` dataclass (fields: `label`, `text`, `speakers`, `start_line`, `end_line`, `significance`), `segment_transcript()` (boundary-based prompt with line-numbered transcript, single Claude call per transcript, `max_tokens=16384`, `stop_reason` guard, shared-boundary tolerance for adjacent segments, DEC-019/DEC-020), `generate_event_label()` → returns `tuple[str, float]` (label, significance score), `filter_by_significance()` (gates segments by threshold), `dedup_labels()` (appends ordinal suffixes "(II)", "(III)" for duplicates, DEC-024), `_create_client()` helper with `timeout=120.0`. Model: claude-sonnet-4-20250514
+- `app/archetype_naming.py` — Deferred archetype naming for dynamic clusters: `maybe_name_cluster()` (triggers naming when `event_count` >= `archetype_naming_threshold`, default 3). Uses Copy Tone register with full PROHIBITED_WORDS list from `app/myth.py` (DEC-023)
 - `app/myth.py` — Claude API proxy, prompt construction, caching (build_myth_prompt, should_regenerate, generate_myth, get_or_generate_myth). PROHIBITED_WORDS list enforces ancestral register.
 - `app/models.py` — Pydantic models for request/response validation (includes MythRequest/MythResponse)
-- `app/db.py` — Supabase client, queries (includes get_cluster_by_id, get_cluster_events_labels, get_latest_myth, insert_myth, update_cluster_myth). `insert_event()` accepts optional `participants` parameter
+- `app/db.py` — Supabase client, queries (includes `get_cluster_by_id`, `get_cluster_events_labels`, `get_latest_myth`, `insert_myth`, `update_cluster_myth`, `insert_raw_input()`, `get_raw_input()`, `update_cluster_name()`, `get_cluster_events_notes()`). `insert_event()` accepts optional `participants`, `raw_input_id`, `start_line`, `end_line` parameters
 
 ### Batch Seeding — seed_transcript.py
-CLI tool for batch-seeding events from Granola transcript files. Features: speaker label remapping (e.g., `--map "Speaker A=emma"`), minimum segment length filtering, `--dry-run` mode for preview, and `--date` argument to set `event_date` explicitly for all seeded events. Uses the same embedding/clustering pipeline as the live ingestion paths. Located at `scripts/seed_transcript.py`.
+CLI tool for batch-seeding events from Granola transcript files. Features: speaker label remapping (e.g., `--map "Speaker A=emma"`), significance-based filtering (replaces former min-length filtering), `--dry-run` mode for preview, and `--date` argument to set `event_date` explicitly for all seeded events. Pipeline: store raw → segment → dedup labels → filter by significance → embed → assign/create cluster → insert event → increment count → maybe name cluster → compute xs. Uses the same data quality stack as the live ingestion paths. Located at `scripts/seed_transcript.py`.
 
 ### Database — Supabase
 Managed Postgres with pgvector extension. Stores events with their embedding vectors, cluster definitions with centroid embeddings, and cached myth text. Cosine similarity queries for cluster assignment run in SQL.
@@ -133,6 +138,15 @@ Managed Postgres with pgvector extension. Stores events with their embedding vec
 -- Enable pgvector
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Raw inputs table (DEC-022)
+CREATE TABLE raw_inputs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  text TEXT NOT NULL,               -- original input text
+  source TEXT NOT NULL,             -- telegram | granola
+  source_metadata JSONB DEFAULT '{}', -- source-specific metadata
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Events table
 CREATE TABLE events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,7 +160,10 @@ CREATE TABLE events (
   cluster_id UUID REFERENCES clusters(id),
   xs FLOAT,                        -- 0.0-1.0 semantic x-position (computed)
   day INTEGER,                     -- days since first event (computed)
-  participants JSONB DEFAULT '[]'  -- speaker names per segment (DEC-017)
+  participants JSONB DEFAULT '[]', -- speaker names per segment (DEC-017)
+  raw_input_id UUID REFERENCES raw_inputs(id), -- FK to source data (DEC-022)
+  start_line INTEGER,              -- segment start line in raw input
+  end_line INTEGER                 -- segment end line in raw input
 );
 
 -- Clusters table
@@ -184,10 +201,11 @@ CREATE INDEX ON clusters USING ivfflat (centroid vector_cosine_ops) WITH (lists 
 ### Embedding Pipeline
 1. Raw text arrives (Telegram message or Granola segment)
 2. Text → OpenAI text-embedding-3-small → 1536-dim vector
-3. Cosine similarity against all cluster centroids
+3. Cosine similarity against all cluster centroids via `assign_or_create_cluster()`
 4. If max similarity >= JOIN_SIM threshold → assign to that cluster, update centroid
-5. If max similarity < JOIN_SIM → create new cluster, request Claude archetype name
+5. If max similarity < JOIN_SIM → `create_dynamic_cluster()` creates a new cluster with name "The Unnamed" and `is_seed=False` (DEC-023)
 6. Store event with embedding and cluster_id
+7. `maybe_name_cluster()` checks if the cluster's event_count has reached `archetype_naming_threshold` (default 3) and, if so, generates an archetype name via Claude (DEC-023)
 
 ### Cluster Centroid Update
 When a new event joins a cluster, the centroid is recomputed as the mean of all member event embeddings. This is an incremental update: `new_centroid = (old_centroid * n + new_embedding) / (n + 1)`. The centroid shifts slightly with each new event, which means cluster boundaries are alive — an event that was borderline may eventually migrate if a better cluster forms nearby.
@@ -199,16 +217,31 @@ When a new event is stored via Telegram or Granola, the pipeline: (1) embeds the
 Myth text is regenerated when a cluster's event count has changed by 3+ since the last generation (`should_regenerate` in `app/myth.py`). The old myth is preserved in the myths table (revision history). The frontend requests myth text via `/myth` POST endpoint (`MythRequest` → `MythResponse`); the backend checks cache freshness and regenerates if stale.
 
 ### Granola Transcript Parsing
-1. Transcript text is sent to `segment_transcript()` from `app/segmentation.py` (DEC-018)
-2. The transcript is line-numbered (L001, L002, ...) and sent to Claude in a single API call (DEC-019)
-3. Claude returns segment boundaries (start_line/end_line) and labels — not verbatim text (DEC-020)
-4. Python slices the original transcript using the boundaries to produce segment text
-5. Boundary validation: start > end, out of range, overlapping segments are rejected
-6. Multi-speaker segments use `participant="shared"` with a `participants` jsonb array listing all contributing speakers (DEC-017)
-7. Each segment is embedded and clustered independently
+Full pipeline: store raw → segment → dedup labels → filter by significance → embed → assign/create cluster → insert event → increment count → maybe name cluster → compute xs.
 
-### Telegram Label Generation
-When a Telegram message arrives, `process_telegram_update()` calls `generate_event_label()` from `app/segmentation.py` to produce a 3-5 word LLM-generated label before insertion. On failure, falls back to `text[:80]`.
+1. Raw transcript stored in `raw_inputs` table (DEC-022)
+2. Transcript text is sent to `segment_transcript()` from `app/segmentation.py` (DEC-018), `max_tokens=16384`, `stop_reason` guard rejects truncated responses
+3. The transcript is line-numbered (L001, L002, ...) and sent to Claude in a single API call (DEC-019)
+4. Claude returns segment boundaries (start_line/end_line), labels, and significance scores — not verbatim text (DEC-020, DEC-021). Shared-boundary tolerance: adjacent segments may share a boundary line
+5. Python slices the original transcript using the boundaries to produce segment text
+6. Boundary validation: start > end, out of range, overlapping segments are rejected
+7. `dedup_labels()` appends ordinal suffixes "(II)", "(III)" for duplicate labels (DEC-024)
+8. `filter_by_significance()` removes segments below significance threshold (default 0.3, DEC-021)
+9. Multi-speaker segments use `participant="shared"` with a `participants` jsonb array listing all contributing speakers (DEC-017)
+10. Each segment is embedded and clustered via `assign_or_create_cluster()` (DEC-023)
+11. `maybe_name_cluster()` triggers deferred archetype naming when threshold reached (DEC-023)
+
+### Telegram Pipeline
+Full pipeline: dedup → label+significance → raw_input → significance filter → embed → assign/create cluster → insert event → increment count → maybe name cluster → compute xs.
+
+1. In-memory dedup by `update_id` (DEC-013)
+2. `generate_event_label()` returns `tuple[str, float]` (label, significance score) — label generation moved before embedding to gate API calls on significance (DEC-021)
+3. Raw message stored in `raw_inputs` table (DEC-022)
+4. Significance filter: messages below threshold (default 0.3) are stored in raw_inputs but not processed into events
+5. Text → OpenAI embedding → `assign_or_create_cluster()` (DEC-023)
+6. Event inserted with `raw_input_id` FK
+7. `maybe_name_cluster()` triggers deferred archetype naming when threshold reached (DEC-023)
+8. On label generation failure, falls back to `text[:80]` with significance 1.0
 
 ## Deferred Architecture (Layers 3-4)
 
@@ -229,10 +262,11 @@ sasa-zamani/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI app, routes, startup
 │   ├── embedding.py         # OpenAI embedding calls
-│   ├── clustering.py        # Cluster assignment, centroids, seeds
+│   ├── clustering.py        # Cluster assignment, centroids, seeds, dynamic creation
 │   ├── telegram.py          # Telegram webhook handler
 │   ├── granola.py           # Granola transcript parser (thematic segmentation)
-│   ├── segmentation.py      # Thematic segmentation engine + label generation
+│   ├── segmentation.py      # Thematic segmentation engine + label + significance
+│   ├── archetype_naming.py  # Deferred archetype naming for dynamic clusters
 │   ├── myth.py              # Claude API proxy, caching
 │   ├── models.py            # Pydantic models
 │   └── db.py                # Supabase client
@@ -258,6 +292,7 @@ sasa-zamani/
 │   ├── test_myth.py          # Myth generation tests
 │   ├── test_seed_transcript.py # Seed transcript pipeline tests
 │   ├── test_segmentation.py   # Segmentation engine tests
+│   ├── test_archetype_naming.py # Archetype naming tests
 │   ├── test_backfill_labels.py # Backfill labels script tests
 │   └── test_integration.py   # End-to-end integration tests
 ├── scripts/
@@ -268,7 +303,9 @@ sasa-zamani/
 │   ├── centroid_matrix.py    # Compute centroid similarity matrix
 │   ├── cluster_sanity.py     # Validate cluster assignment quality
 │   ├── backfill_labels.py    # Retroactive LLM label generation for existing events
-│   └── test_myth_quality.py  # Manual myth quality evaluation (not collected by pytest)
+│   ├── test_myth_quality.py  # Manual myth quality evaluation (not collected by pytest)
+│   ├── migrate_sprint4.sql   # Sprint 4 schema migration
+│   └── init_supabase.sql     # Full schema DDL (canonical)
 ├── requirements.txt
 ├── pyproject.toml            # pytest config, marker registration
 ├── Procfile                  # Railway deployment

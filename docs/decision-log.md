@@ -460,3 +460,95 @@ Requires line-numbering the transcript before sending to Claude. Boundary valida
 
 **Supersedes:** N/A
 **Cross-References:** DEC-018 (thematic segmentation), DEC-019 (combined call)
+
+---
+
+**DEC-021:** Significance filtering in both pipelines
+**Date:** 2026-03-20
+**Sprint:** 4
+**Session:** Planning / S1
+
+**Decision:**
+Add significance-based filtering to both the Granola (batch) and Telegram (single message) ingestion pipelines. Each segment or message receives a significance score (0.0–1.0) from Claude alongside its label. Segments scoring below the configurable threshold (default 0.3, via `significance_threshold` in `app/config.py`) are excluded from event creation — they are not embedded, clustered, or stored as events. Replaces the `--min-length` character-count filter in `seed_transcript.py`.
+
+**Alternatives Rejected:**
+1. Keep character-length filtering: Length is a poor proxy for significance. Short messages can be meaningful; long messages can be logistical noise.
+2. Filter only in the batch pipeline: Would produce inconsistent data quality between seeded transcripts and live Telegram messages.
+
+**Rationale:**
+Granola transcripts and Telegram conversations contain logistical, meta-conversational, and low-signal content ("okay," "let me share my screen," turn-taking phatics) that adds noise to the embedding space and dilutes cluster quality. An LLM-assessed significance score captures semantic value rather than surface features like length. Applying the same filter to both pipelines ensures consistent data quality regardless of source.
+
+**Constraints:**
+`generate_event_label()` now returns a `tuple[str, float]` (label, significance) instead of `str`. All callers must handle the new return type.
+
+**Supersedes:** N/A (replaces min-length filtering in seed_transcript.py)
+**Cross-References:** DEC-018 (thematic segmentation), DEC-019 (combined call)
+
+---
+
+**DEC-022:** raw_inputs table for all incoming data
+**Date:** 2026-03-20
+**Sprint:** 4
+**Session:** Planning / S2
+
+**Decision:**
+Create a `raw_inputs` table to store all incoming data before processing. Schema: `id UUID`, `text TEXT`, `source TEXT`, `source_metadata JSONB`, `created_at TIMESTAMPTZ`. The `events` table gains three new nullable columns: `raw_input_id UUID` (FK to `raw_inputs`), `start_line INTEGER`, `end_line INTEGER`. Telegram messages are stored individually (one raw_input per message). Granola transcripts are stored as a single raw_input with events referencing line ranges.
+
+**Alternatives Rejected:**
+1. Store raw data in the events table: Mixes raw input with processed output. Makes it impossible to re-process from raw data if the pipeline changes.
+2. Store only Granola transcripts, not Telegram messages: Inconsistent. All input should be preserved for reproducibility.
+
+**Rationale:**
+The system processes raw input through multiple transformations (segmentation, labeling, significance filtering, embedding). Storing the raw input separately from processed events enables re-processing when the pipeline improves (e.g., better segmentation prompts, different significance thresholds) without re-ingesting from external sources. The FK + line range columns on events provide traceability from any event back to its source text.
+
+**Constraints:**
+Schema migration required: new table creation + ALTER TABLE on events. Applied via `scripts/migrate_sprint4.sql` and `scripts/init_supabase.sql`.
+
+**Supersedes:** N/A
+**Cross-References:** DEC-018 (thematic segmentation — raw input stored before segmentation)
+
+---
+
+**DEC-023:** Deferred archetype naming — "The Unnamed" placeholder until threshold
+**Date:** 2026-03-20
+**Sprint:** 4
+**Session:** Planning / S3
+
+**Decision:**
+When a new event falls below the join threshold for all existing clusters, create a dynamic cluster with `name = "The Unnamed"` and `is_seed = False`. Archetype naming is deferred until the cluster's `event_count` reaches the configurable `archetype_naming_threshold` (default 3, via `app/config.py`). At that point, `maybe_name_cluster()` calls Claude to generate an archetype name in Copy Tone register. The naming prompt includes the full PROHIBITED_WORDS list from `app/myth.py`. New module: `app/archetype_naming.py`.
+
+**Alternatives Rejected:**
+1. Name immediately on cluster creation: A single event provides insufficient context for a meaningful archetype name. Claude would produce generic labels.
+2. Never auto-name — require manual naming: Adds friction and doesn't scale with dynamic cluster creation.
+
+**Rationale:**
+DEC-011 designed the path for new cluster creation but left naming unbuilt. A cluster with one event is too thin for Claude to produce a resonant archetype name — waiting for 3 events gives enough thematic convergence for meaningful naming. "The Unnamed" as placeholder is visible in the frontend and signals that the constellation is still forming. The naming threshold is configurable to allow tuning.
+
+**Constraints:**
+Requires Anthropic API key for naming calls. `maybe_name_cluster()` is a no-op if cluster already has a non-placeholder name or event_count < threshold.
+
+**Supersedes:** N/A (implements the designed-but-unbuilt path from DEC-011)
+**Cross-References:** DEC-011 (seed clusters, dynamic deferred), DEC-010 (ancestral register)
+
+---
+
+**DEC-024:** Post-processing label dedup with ordinal suffixes
+**Date:** 2026-03-20
+**Sprint:** 4
+**Session:** Planning / S1
+
+**Decision:**
+After segmentation, `dedup_labels()` scans for duplicate labels within a transcript's segments and appends ordinal suffixes: first occurrence unchanged, second gets " (II)", third gets " (III)", etc. Exact case-sensitive string match. Applied as a post-processing step after `segment_transcript()` returns.
+
+**Alternatives Rejected:**
+1. Instruct Claude to avoid duplicates in the prompt: Unreliable — Claude sometimes produces identical labels for thematically similar segments.
+2. Use numeric suffixes (1, 2, 3): Roman numerals in parentheses match the marginalia register aesthetic.
+
+**Rationale:**
+Thematic segmentation sometimes produces identical labels for adjacent segments about the same topic. Duplicate labels in the frontend make events indistinguishable. Post-processing dedup is deterministic and doesn't depend on Claude following instructions perfectly. The ordinal suffix preserves the original label while disambiguating.
+
+**Constraints:**
+Only applies within a single transcript's segments. Cross-transcript label collisions are not addressed (acceptable — labels are display-only, not unique keys).
+
+**Supersedes:** N/A
+**Cross-References:** DEC-019 (combined segmentation + label), DEC-018 (thematic segmentation)
