@@ -12,6 +12,7 @@ from app.db import (
     update_event_xs,
 )
 from app.embedding import EmbeddingError, embed_text
+from app.segmentation import SegmentationError, generate_event_label
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,12 @@ def process_telegram_update(update: dict) -> dict:
         return {"processed": False, "reason": "cluster_failed", "event_id": None}
 
     try:
-        label = text[:80] if len(text) > 80 else text
+        label = generate_event_label(text)
+    except (SegmentationError, Exception) as exc:
+        logger.warning("Label generation failed: %s — falling back to text[:80]", exc)
+        label = text[:80]
+
+    try:
         row = insert_event(
             label=label,
             note=text,

@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 import app.telegram as telegram_module
+from app.segmentation import SegmentationError
 from app.telegram import (
     PARTICIPANT_MAP,
     _DEDUP_CAP,
@@ -207,7 +208,8 @@ def test_process_skips_duplicate():
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-def test_process_full_pipeline(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.generate_event_label", return_value="a meaningful moment")
+def test_process_full_pipeline(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     update = _make_update(text="a meaningful moment", update_id=777)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -223,7 +225,8 @@ def test_process_full_pipeline(mock_embed, mock_centroids, mock_insert, mock_inc
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-def test_process_pipeline_computes_xs(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.generate_event_label", return_value="a meaningful moment")
+def test_process_pipeline_computes_xs(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     update = _make_update(text="a meaningful moment", update_id=778)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -238,7 +241,8 @@ def test_process_pipeline_computes_xs(mock_embed, mock_centroids, mock_insert, m
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-def test_process_pipeline_increments_event_count(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.generate_event_label", return_value="dinner together")
+def test_process_pipeline_increments_event_count(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     update = _make_update(text="dinner together", update_id=779)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -260,12 +264,62 @@ def test_process_embedding_failure(mock_embed):
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-def test_telegram_increment_failure_event_survives(mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.generate_event_label", return_value="still works")
+def test_telegram_increment_failure_event_survives(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
     update = _make_update(text="still works", update_id=890)
     result = process_telegram_update(update)
     assert result["processed"] is True
     assert result["event_id"] == FAKE_EVENT_ID
     mock_insert.assert_called_once()
+
+
+# --- label generation ---
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.generate_event_label", return_value="Morning coffee ritual")
+def test_telegram_uses_llm_label(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    update = _make_update(text="Had my morning coffee on the porch", update_id=900)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_insert.assert_called_once()
+    assert mock_insert.call_args[1]["label"] == "Morning coffee ritual"
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.generate_event_label", side_effect=SegmentationError("API down"))
+def test_telegram_label_failure_falls_back(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    msg = "Had my morning coffee on the porch"
+    update = _make_update(text=msg, update_id=901)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_insert.assert_called_once()
+    assert mock_insert.call_args[1]["label"] == msg[:80]
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.generate_event_label", return_value="Exact label passed through")
+def test_telegram_label_content_passed_through(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+    update = _make_update(text="some message text", update_id=902)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_label.assert_called_once_with("some message text")
+    assert mock_insert.call_args[1]["label"] == "Exact label passed through"
 
 
 # --- dedup cap (DEF-013) ---
