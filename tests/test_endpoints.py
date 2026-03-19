@@ -1,4 +1,4 @@
-"""Tests for GET /events, GET /clusters, and GET /health endpoints."""
+"""Tests for GET /events, GET /clusters, GET /health, and POST /myth endpoints."""
 
 from unittest.mock import patch
 from uuid import uuid4
@@ -198,3 +198,48 @@ def test_cluster_response_new_fields_default():
     assert cluster.glyph_id is None
     assert cluster.myth_text is None
     assert cluster.is_seed is False
+
+
+# --- POST /myth ---
+
+FAKE_CLUSTER_ID = str(uuid4())
+
+
+async def test_post_myth_returns_200_with_valid_cluster(client):
+    with patch("app.main.get_or_generate_myth", return_value=("The vessel remembers.", False)):
+        response = await client.post("/myth", json={"cluster_id": FAKE_CLUSTER_ID})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["myth_text"] == "The vessel remembers."
+    assert data["cached"] is False
+
+
+async def test_post_myth_returns_404_for_unknown_cluster(client):
+    with patch("app.main.get_or_generate_myth", side_effect=ValueError("Cluster not found")):
+        response = await client.post("/myth", json={"cluster_id": str(uuid4())})
+    assert response.status_code == 404
+    assert response.json()["error"] == "cluster_not_found"
+
+
+async def test_post_myth_returns_422_for_missing_body(client):
+    response = await client.post("/myth")
+    assert response.status_code == 422
+
+
+async def test_post_myth_returns_422_for_malformed_uuid(client):
+    response = await client.post("/myth", json={"cluster_id": "not-a-uuid"})
+    assert response.status_code == 422
+
+
+async def test_post_myth_cached_true(client):
+    with patch("app.main.get_or_generate_myth", return_value=("Cached myth.", True)):
+        response = await client.post("/myth", json={"cluster_id": FAKE_CLUSTER_ID})
+    assert response.status_code == 200
+    assert response.json()["cached"] is True
+
+
+async def test_post_myth_returns_503_on_generation_failure(client):
+    with patch("app.main.get_or_generate_myth", side_effect=RuntimeError("API down")):
+        response = await client.post("/myth", json={"cluster_id": FAKE_CLUSTER_ID})
+    assert response.status_code == 503
+    assert response.json()["error"] == "myth_generation_failed"

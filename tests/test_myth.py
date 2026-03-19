@@ -42,7 +42,7 @@ class TestShouldRegenerate:
         return_value={"event_count_at_generation": 2, "version": 1},
     )
     def test_returns_true_when_delta_gte_3(self, mock_latest: MagicMock) -> None:
-        assert should_regenerate("cluster-1", 5) is True
+        assert should_regenerate("cluster-1", 6) is True
 
     @patch(
         "app.myth.get_latest_myth",

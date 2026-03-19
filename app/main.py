@@ -11,9 +11,10 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import check_connection, ensure_schema, get_clusters, get_events
-from app.models import ClusterResponse, EventResponse, HealthResponse
+from app.models import ClusterResponse, EventResponse, HealthResponse, MythRequest, MythResponse
 from app.granola import process_granola_upload
 from app.models import GranolaRequest
+from app.myth import get_or_generate_myth
 from app.telegram import process_telegram_update
 
 load_dotenv()
@@ -123,10 +124,24 @@ async def granola_upload(request: Request):
     return {"events": results}
 
 
-@app.post("/myth")
-async def generate_myth(request: Request) -> dict:
+@app.post("/myth", response_model=MythResponse)
+async def generate_myth(request: MythRequest) -> MythResponse:
     """Generate a mythic sentence for a cluster via Claude. Returns cached result if fresh, regenerates if stale."""
-    return {"myth": ""}
+    import logging
+
+    from fastapi.responses import JSONResponse
+
+    myth_logger = logging.getLogger("app.myth")
+
+    try:
+        text, is_cached = get_or_generate_myth(str(request.cluster_id))
+    except ValueError:
+        return JSONResponse(status_code=404, content={"error": "cluster_not_found"})
+    except Exception as exc:
+        myth_logger.error("Myth generation failed for cluster %s: %s", request.cluster_id, exc)
+        return JSONResponse(status_code=503, content={"error": "myth_generation_failed"})
+
+    return MythResponse(myth_text=text, cached=is_cached)
 
 
 @app.get("/health", response_model=HealthResponse)

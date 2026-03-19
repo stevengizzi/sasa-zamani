@@ -13,8 +13,8 @@ from app.db import (
 
 PROHIBITED_WORDS = (
     "detect, discover, reveal, collective unconscious, synchronicity, "
-    "universe, field, activation, signal, journey, transformation, "
-    "powerful, growth, explore, reflect"
+    "universe, field, activate, activation, signal, journey, transformation, "
+    "powerful, growth, explore, reflect, unlock"
 )
 
 PREFERRED_WORDS = (

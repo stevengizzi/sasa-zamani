@@ -14,7 +14,7 @@ Before making any changes:
 3. Verify you are on the correct branch
 
 ## Objective
-Wire the myth generation module into the FastAPI `/myth` endpoint. Replace the stub that returns `{"myth": ""}` with a working handler that calls `get_or_generate_myth`.
+Wire the myth generation module into the FastAPI `/myth` endpoint. Replace the stub that returns `{"myth": ""}` with a working handler that calls `get_or_generate_myth`. Also apply two targeted fixes from the S3a Tier 2 review.
 
 ## Requirements
 
@@ -34,8 +34,19 @@ Wire the myth generation module into the FastAPI `/myth` endpoint. Replace the s
 
 3. **CORS:** Verify the existing CORS middleware allows POST to `/myth` from the frontend origin. It should — the current config allows all origins. Just confirm, don't change.
 
+4. **S3a review fix — PROHIBITED_WORDS (in `app/myth.py`):**
+   The Tier 2 review found the PROHIBITED_WORDS constant is missing "unlock" from the canonical banned list, and uses "activation" but not "activate". Fix:
+   - Add `"unlock"` to the PROHIBITED_WORDS list
+   - Add `"activate"` to the PROHIBITED_WORDS list (keep "activation" as well)
+   - Do NOT change anything else in myth.py — no logic changes, no other edits.
+
+5. **S3a review fix — redundant test (in `tests/test_myth.py`):**
+   The Tier 2 review found `test_returns_true_when_delta_gte_3` and `test_returns_true_when_delta_exactly_3` use identical mock data (both delta=3). Fix:
+   - Change `test_returns_true_when_delta_gte_3` to use `current_event_count=6` (delta=4) so it tests the > 3 case distinctly from the == 3 case.
+
 ## Constraints
-- Do NOT modify: `app/telegram.py`, `app/granola.py`, `app/embedding.py`, `app/myth.py` (already complete from S3a), `static/index.html`, `app/config.py`
+- Do NOT modify: `app/telegram.py`, `app/granola.py`, `app/embedding.py`, `static/index.html`, `app/config.py`
+- `app/myth.py`: ONLY modify the PROHIBITED_WORDS constant (add "unlock" and "activate"). No other changes.
 - Do NOT change: any existing endpoint behavior. Only the `/myth` endpoint changes (from stub to functional).
 - Do NOT add: any new endpoints beyond wiring the existing `/myth` stub.
 
@@ -60,6 +71,8 @@ After implementation:
 - [ ] 503 for generation failure with error logged
 - [ ] All existing tests pass
 - [ ] 4+ new tests written and passing
+- [ ] PROHIBITED_WORDS updated: "unlock" and "activate" added
+- [ ] Redundant delta test differentiated (delta=3 vs delta=4)
 - [ ] Close-out report written to file
 - [ ] Tier 2 review completed via @reviewer subagent
 
@@ -68,7 +81,7 @@ After implementation:
 |-------|---------------|
 | All other endpoints unchanged | GET /events, GET /clusters, POST /telegram, POST /granola, GET /health all still work |
 | CORS middleware unchanged | Check main.py CORS config is identical |
-| myth.py not modified | git diff shows no changes to app/myth.py |
+| myth.py logic unchanged | git diff app/myth.py shows ONLY PROHIBITED_WORDS constant changes (added words) |
 | App startup still works | health check passes |
 
 ## Close-Out
@@ -86,7 +99,7 @@ Provide the @reviewer with:
 2. The close-out report path: `docs/sprints/sprint-2/session-s3b-closeout.md`
 3. The diff range: `git diff HEAD~1`
 4. The test command: `python -m pytest tests/test_endpoints.py tests/test_myth.py -x -q`
-5. Files that should NOT have been modified: `app/telegram.py`, `app/granola.py`, `app/embedding.py`, `app/myth.py`, `app/config.py`, `static/index.html`
+5. Files that should NOT have been modified: `app/telegram.py`, `app/granola.py`, `app/embedding.py`, `app/config.py`, `static/index.html`
 
 The @reviewer will write its report to:
 docs/sprints/sprint-2/session-s3b-review.md
@@ -100,11 +113,14 @@ If the @reviewer reports CONCERNS, follow the post-review fix documentation prot
 3. Verify MythRequest uses UUID type for cluster_id (not str)
 4. Verify error handling: generation failure returns 503 with error logged, not unhandled exception
 5. Verify no other endpoints were modified
+6. Verify PROHIBITED_WORDS now includes "unlock" and "activate" (S3a review fix)
+7. Verify delta test differentiation: one tests delta==3, the other tests delta>3 (S3a review fix)
 
 ## Sprint-Level Regression Checklist (for @reviewer)
 - [ ] All existing passing tests still pass
 - [ ] All endpoints except /myth behave identically
 - [ ] No prohibited files modified
+- [ ] myth.py changes limited to PROHIBITED_WORDS constant only
 
 ## Sprint-Level Escalation Criteria (for @reviewer)
 - 5+ existing tests fail → stop and assess

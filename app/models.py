@@ -38,3 +38,12 @@ class ErrorResponse(BaseModel):
 
 class GranolaRequest(BaseModel):
     transcript: str
+
+
+class MythRequest(BaseModel):
+    cluster_id: UUID
+
+
+class MythResponse(BaseModel):
+    myth_text: str
+    cached: bool
