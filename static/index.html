@@ -631,6 +631,7 @@ function setupInteractions(){
 
   document.getElementById('btn-strata').addEventListener('click',()=>{
     if(viewMode==='strata')return;
+    if(panelOpen)closePanelFull();
     viewMode='strata';transDir=-1;
     document.getElementById('btn-strata').classList.add('active');
     document.getElementById('btn-resonance').classList.remove('active');
@@ -638,6 +639,7 @@ function setupInteractions(){
   });
   document.getElementById('btn-resonance').addEventListener('click',()=>{
     if(viewMode==='resonance')return;
+    if(panelOpen)closePanelFull();
     viewMode='resonance';transDir=1;
     document.getElementById('btn-resonance').classList.add('active');
     document.getElementById('btn-strata').classList.remove('active');
@@ -656,9 +658,16 @@ function closePanel(){
   document.getElementById('side-panel').classList.remove('open');
   panelOpen=false;
 }
+function closePanelFull(){
+  const panel=document.getElementById('side-panel');
+  if(panel._stopSpiral){panel._stopSpiral();panel._stopSpiral=null;}
+  closePanel();
+}
 function openPanel(html){
+  const panel=document.getElementById('side-panel');
+  if(panel._stopSpiral){panel._stopSpiral();panel._stopSpiral=null;}
   document.getElementById('panel-content').innerHTML=html;
-  document.getElementById('side-panel').classList.add('open');
+  panel.classList.add('open');
   panelOpen=true;
 }
 
@@ -862,11 +871,11 @@ function openEventPanel(idx){
     }).join('')}
   `);
 
-  document.getElementById('ep-glyph-btn')?.addEventListener('click',()=>openArchetypePanel(cl.id));
-  document.getElementById('ep-center-glyph-btn')?.addEventListener('click',()=>openArchetypePanel(cl.id));
+  document.getElementById('ep-glyph-btn')?.addEventListener('click',(ev)=>{ev.stopPropagation();openArchetypePanel(cl.id);});
+  document.getElementById('ep-center-glyph-btn')?.addEventListener('click',(ev)=>{ev.stopPropagation();openArchetypePanel(cl.id);});
 
   document.querySelectorAll('.ep-neighbor').forEach(el=>{
-    el.addEventListener('click',()=>openEventPanel(parseInt(el.dataset.idx)));
+    el.addEventListener('click',(ev)=>{ev.stopPropagation();openEventPanel(parseInt(el.dataset.idx));});
   });
 
   fetchMyth(cl,'ep-myth-text');
