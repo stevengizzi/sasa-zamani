@@ -6,14 +6,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import check_connection, ensure_schema, get_clusters, get_events
-from app.models import ClusterResponse, EventResponse, HealthResponse, MythRequest, MythResponse
+from app.models import ClusterResponse, EventResponse, GranolaRequest, HealthResponse, MythRequest, MythResponse
 from app.granola import process_granola_upload
-from app.models import GranolaRequest
 from app.myth import get_or_generate_myth
 from app.telegram import process_telegram_update
 
@@ -125,7 +124,7 @@ async def granola_upload(request: Request):
 
 
 @app.post("/myth", response_model=MythResponse)
-async def generate_myth(request: MythRequest) -> MythResponse:
+async def generate_myth(request: MythRequest) -> MythResponse | JSONResponse:
     """Generate a mythic sentence for a cluster via Claude. Returns cached result if fresh, regenerates if stale."""
     import logging
 
