@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str
     telegram_bot_token: str
     cluster_join_threshold: float = 0.3
+    significance_threshold: float = 0.3
 
 
 @lru_cache
