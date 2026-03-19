@@ -435,7 +435,7 @@ async function init(){
   const candidateEdges=[];
   for(const [cid,indices] of clusterEventIndices){
     const cl=clusterMap.get(cid);
-    const weight=1.0/cl.event_count;
+    const weight=1.0/(indices.length||1);
     if(weight<=0.05)continue;
     for(let a=0;a<indices.length;a++){
       for(let b=a+1;b<indices.length;b++){
