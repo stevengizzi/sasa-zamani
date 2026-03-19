@@ -14,9 +14,11 @@ from app.clustering import (
     SEED_ARCHETYPES,
     XS_CENTERS,
     assign_cluster,
+    assign_or_create_cluster,
     compute_seed_centroids,
     compute_xs,
     cosine_similarity,
+    create_dynamic_cluster,
     seed_clusters,
 )
 
@@ -264,6 +266,109 @@ class TestSeedClustersGlyphId:
         expected_glyph_ids = {a["glyph_id"] for a in SEED_ARCHETYPES}
         assert set(glyph_ids_passed) == expected_glyph_ids
         assert all(gid is not None for gid in glyph_ids_passed)
+
+
+# ---------------------------------------------------------------------------
+# assign_or_create_cluster
+# ---------------------------------------------------------------------------
+
+
+class TestAssignOrCreateCluster:
+    def test_above_threshold_returns_existing(self) -> None:
+        embedding = [1.0, 0.0, 0.0]
+        centroids = [("cluster-a", [1.0, 0.0, 0.0])]
+
+        cluster_id, score, created = assign_or_create_cluster(embedding, centroids)
+        assert cluster_id == "cluster-a"
+        assert score == pytest.approx(1.0)
+        assert created is False
+
+    def test_below_threshold_creates_new(self) -> None:
+        embedding = _unit_vector(3, 0)
+        centroids = [("cluster-a", _unit_vector(3, 1))]
+
+        fake_row = {"id": "new-cl-1", "name": "The Unnamed", "is_seed": False}
+        with patch("app.db.insert_cluster", return_value=fake_row):
+            cluster_id, score, created = assign_or_create_cluster(embedding, centroids)
+
+        assert cluster_id == "new-cl-1"
+        assert score == pytest.approx(0.0)
+        assert created is True
+
+    def test_at_exactly_threshold_returns_existing(self) -> None:
+        """Similarity == threshold should assign to existing cluster, not create new."""
+        # Build two vectors with known cosine similarity equal to 0.3
+        # cos(θ) = 0.3 → use vectors that produce exactly 0.3
+        import math
+
+        vec_a = [0.3, math.sqrt(1 - 0.09)]
+        vec_b = [1.0, 0.0]
+        centroids = [("cluster-exact", vec_b)]
+
+        cluster_id, score, created = assign_or_create_cluster(vec_a, centroids)
+        assert cluster_id == "cluster-exact"
+        assert score == pytest.approx(0.3, abs=1e-6)
+        assert created is False
+
+    def test_empty_centroids_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty"):
+            assign_or_create_cluster([1.0], [])
+
+
+# ---------------------------------------------------------------------------
+# create_dynamic_cluster
+# ---------------------------------------------------------------------------
+
+
+class TestCreateDynamicCluster:
+    def test_inserts_with_correct_params(self) -> None:
+        fake_row = {"id": "dyn-1", "name": "The Unnamed", "is_seed": False, "glyph_id": None}
+        centroid = [0.5] * 1536
+
+        with patch("app.db.insert_cluster", return_value=fake_row) as mock_insert:
+            result = create_dynamic_cluster(centroid)
+
+        assert result == "dyn-1"
+        mock_insert.assert_called_once_with(
+            name="The Unnamed",
+            centroid_embedding=centroid,
+            is_seed=False,
+            glyph_id=None,
+        )
+
+    def test_logs_creation(self, caplog: pytest.LogCaptureFixture) -> None:
+        fake_row = {"id": "dyn-log", "name": "The Unnamed", "is_seed": False}
+
+        with (
+            patch("app.db.insert_cluster", return_value=fake_row),
+            caplog.at_level(logging.INFO, logger="app.clustering"),
+        ):
+            create_dynamic_cluster([0.1] * 1536)
+
+        assert "dyn-log" in caplog.text
+        assert "dynamic cluster" in caplog.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# assign_cluster backward compatibility
+# ---------------------------------------------------------------------------
+
+
+class TestAssignClusterBackwardCompat:
+    def test_returns_two_element_tuple(self) -> None:
+        embedding = [1.0, 0.0, 0.0]
+        centroids = [("cl-compat", [1.0, 0.0, 0.0])]
+        result = assign_cluster(embedding, centroids)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+    def test_still_logs_warning_below_threshold(self, caplog: pytest.LogCaptureFixture) -> None:
+        embedding = _unit_vector(3, 0)
+        centroids = [("only", _unit_vector(3, 1))]
+        with caplog.at_level(logging.WARNING, logger="app.clustering"):
+            cluster_id, score = assign_cluster(embedding, centroids)
+        assert cluster_id == "only"
+        assert "below threshold" in caplog.text
 
 
 # ---------------------------------------------------------------------------

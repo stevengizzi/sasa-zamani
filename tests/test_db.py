@@ -8,6 +8,7 @@ from app.db import (
     check_connection,
     ensure_schema,
     get_cluster_centroids,
+    get_cluster_events_notes,
     get_clusters,
     get_events,
     get_raw_input,
@@ -16,6 +17,7 @@ from app.db import (
     insert_event,
     insert_raw_input,
     reset_client,
+    update_cluster_name,
 )
 
 pytestmark = pytest.mark.anyio
@@ -536,3 +538,36 @@ async def test_ensure_schema_probes_raw_inputs(mock_supabase):
     ensure_schema()
     table_calls = [call.args[0] for call in mock_supabase.table.call_args_list]
     assert "raw_inputs" in table_calls
+
+
+# --- update_cluster_name ---
+
+
+async def test_update_cluster_name(mock_supabase):
+    update_chain = _chain(mock_supabase, "clusters").update.return_value
+    update_chain.eq.return_value = update_chain
+    update_chain.execute.return_value = MagicMock(data=None)
+
+    update_cluster_name("cl-rename", "The Hearth")
+
+    _chain(mock_supabase, "clusters").update.assert_called_once_with({"name": "The Hearth"})
+    update_chain.eq.assert_called_once_with("id", "cl-rename")
+
+
+# --- get_cluster_events_notes ---
+
+
+async def test_get_cluster_events_notes_returns_truncated(mock_supabase):
+    long_note = "x" * 300
+    fake_events = [
+        {"note": long_note},
+        {"note": "short note"},
+    ]
+    select_chain = _chain(mock_supabase, "events").select.return_value
+    select_chain.eq.return_value = select_chain
+    select_chain.execute.return_value = MagicMock(data=fake_events)
+
+    notes = get_cluster_events_notes("cl-notes")
+    assert len(notes) == 2
+    assert len(notes[0]) == 200
+    assert notes[1] == "short note"

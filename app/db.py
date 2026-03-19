@@ -227,6 +227,23 @@ def get_cluster_events_labels(cluster_id: str) -> list[str]:
     return [row["label"] for row in response.data]
 
 
+def update_cluster_name(cluster_id: str, name: str) -> None:
+    """Update a cluster's name."""
+    get_db().table("clusters").update({"name": name}).eq("id", cluster_id).execute()
+
+
+def get_cluster_events_notes(cluster_id: str) -> list[str]:
+    """Return event notes (first 200 chars each) for a cluster."""
+    response = (
+        get_db()
+        .table("events")
+        .select("note")
+        .eq("cluster_id", cluster_id)
+        .execute()
+    )
+    return [row["note"][:200] for row in response.data]
+
+
 def get_latest_myth(cluster_id: str) -> dict | None:
     """Return the most recent myth entry for a cluster, or None if none exist."""
     response = (

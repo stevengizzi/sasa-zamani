@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     cluster_join_threshold: float = 0.3
     significance_threshold: float = 0.3
+    archetype_naming_threshold: int = 3
 
 
 @lru_cache
