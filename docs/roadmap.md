@@ -74,13 +74,29 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 - XS_CENTERS overlap fixed (Gate/Silence)
 - New files: `scripts/seed_transcript.py`, `tests/test_seed_transcript.py`, `scripts/test_myth_quality.py`
 
-### Sprint 4 — Design Brief Alignment (Phase 2)
+### Sprint 3.5 — Thematic Segmentation + LLM Labels ✓
+**Status:** Complete (7 sessions, tests 147 → 166)
+
+**Delivered:**
+- Thematic segmentation engine (`app/segmentation.py`) replacing regex speaker-turn splitting (DEC-018)
+- Boundary-based segmentation prompt — Claude returns line numbers, not text (DEC-020)
+- Combined segmentation + label generation in single Claude call per transcript (DEC-019)
+- `participants` jsonb column on events for multi-speaker attribution (DEC-017)
+- LLM-generated labels for Telegram messages via `generate_event_label()` (resolves DEF-019, FF-005)
+- Production re-seeded: 48 events (46 granola, 2 telegram) across 6 clusters
+- Backfill script (`scripts/backfill_labels.py`) for retroactive label generation
+- New files: `app/segmentation.py`, `scripts/backfill_labels.py`, `tests/test_segmentation.py`, `tests/test_backfill_labels.py`
+
+### Sprint 4 — Data Quality + Significance Filtering
+**Scope:** Significance filtering for segmentation (score-based threshold), transcript storage table with FK from events, label prompt redesign for marginalia register, duplicate label defense, below-threshold new archetype creation (implement DEC-011 designed-but-unbuilt path), 10,243-char truncation investigation (DEF-021).
+
+### Sprint 5 — Design Brief Alignment (Phase 2)
 **Scope:** Visual polish. Implement the Design Brief's aesthetic: Cormorant Garamond / DM Mono typography, river-at-night color palette (#0e0c09 void, #c49a3a gold, #8a8aaa violet-slate), grain overlay, blur and atmosphere, the layering rules. Scroll/zoom/pan on both views.
 
-### Sprint 5 — Zamani View + Scroll/Zoom (Phase 2)
+### Sprint 6 — Zamani View + Scroll/Zoom (Phase 2)
 **Scope:** Build the third view (zamani): force-directed archetype-level field with truth threads between related archetypes. Implement scroll/zoom/pan across all views. Mobile layout optimization.
 
-### Sprint 6+ — Truth & Myth Layers (Phase 3)
+### Sprint 7+ — Truth & Myth Layers (Phase 3)
 **Scope:** Layer 3 truth candidate generation. Accept/reject/revise mechanic. Layer 4 full myth output. The publication frame.
 
 ## Deferred Items
@@ -99,7 +115,9 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 | DEF-015 | Privacy flag (AI-readable, participant-hidden) | Phase 4 | Trust-based for three collaborators |
 | DEF-017 | Myth post-validation | Sprint 4+ | Verify generated myths pass PROHIBITED_WORDS and register checks |
 | DEF-018 | Transcript dedup | Sprint 4+ | Prevent re-seeding same transcript |
-| DEF-019 | LLM-generated event labels | Sprint 4+ | Currently raw text[:80]; Claude summary would improve readability |
+| ~~DEF-019~~ | ~~LLM-generated event labels~~ | ~~Sprint 4+~~ | **RESOLVED** Sprint 3.5 — implemented via `generate_event_label()` in segmentation.py |
+| DEF-020 | Per-participant attribution for multi-speaker Granola events | Phase 4 | Currently all set to participant="shared"; segmentation returns speaker lists but pipeline doesn't attribute individually |
+| DEF-021 | 10,243-char segment truncation | Sprint 4 | Three segments hit exactly this length and are cut mid-sentence; pipeline limit needs investigation |
 
 ## Fast-Follow Feature Ideas
 
@@ -108,8 +126,8 @@ Proposed additions identified during bootstrap. Not part of the original ideatio
 ### FF-001: Dialogue with Your Archetypes
 Open a conversational mode from the archetype panel — ask a constellation a question and Claude responds *as* that archetype, drawing exclusively from the cluster's events, speaking in the ancestral register. The past becomes a conversational partner, not a display. Literally "in dialogue with the ancestors of your mind" (Granola transcript). Architecturally simple (one new endpoint, a system prompt, chat UI inside the archetype panel). Prompt engineering is the hard part — Emma should own the voice.
 
-### FF-002: Thematic Segmentation of Conversation Transcripts
-Instead of splitting Granola transcripts on speaker turns (too thin to embed meaningfully), use Claude to segment conversations into thematic units before embedding. Each thematic segment becomes one event, attributed to all participating speakers. Preserves the intersubjective quality of insights that emerge *between* speakers. Dramatically improves clustering quality for conversational input. One Claude API call per transcript as a pre-processing step.
+### ~~FF-002: Thematic Segmentation of Conversation Transcripts~~ ✓ RESOLVED (Sprint 3.5)
+Implemented in Sprint 3.5 via `app/segmentation.py`. Boundary-based prompt (DEC-020), combined segmentation + labels (DEC-019), integrated into both batch and live pipelines (DEC-018).
 
 ### FF-003: Tidal Return as Engagement Mechanism (Resonance Notifications)
 When a new Telegram event clusters with an old constellation (high similarity + high time gap), the bot replies in the ancestral register: "Something you said today woke a constellation from the depths." The pool speaks back through the same channel the user is already in. Extends to a weekly "resonance report" summarizing what stirred, which constellations grew, which old ones resurfaced. Solves the habit loop problem (RSK-003) without adding a new surface. Scheduled job (cron) for weekly report.
@@ -117,8 +135,8 @@ When a new Telegram event clusters with an old constellation (high similarity + 
 ### FF-004: Seed Pool from Existing Life Data
 Bulk upload of journals, message exports, old calendars to pre-populate the pool. Eliminates the empty-pool first-visit problem. The first encounter — seeing constellations you didn't know existed in your own life — demonstrates the tool's value before the daily input habit forms. For MVP demo: pre-seed with the Mar 17 Granola transcript so the map isn't empty on first visit. Uses the same embedding/clustering pipeline.
 
-### FF-005: LLM-Generated Event Labels (DEF-019)
-Event labels currently use raw `text[:80]` — the first 80 characters of the message. Replace with a Claude-generated 3-5 word summary that captures the event's essence. One API call per event at ingestion time. Low cost, high readability improvement for both the strata view and detail panels. Identified during Sprint 3 S2 live run.
+### ~~FF-005: LLM-Generated Event Labels (DEF-019)~~ ✓ RESOLVED (Sprint 3.5)
+Implemented in Sprint 3.5. Transcript segments get labels via combined segmentation call (DEC-019). Telegram messages get labels via `generate_event_label()`. Resolves DEF-019.
 
 ### FF-006: Myth as Shareable Artifact
 A share button on the archetype panel generates a designed standalone card — myth text in Cormorant Garamond, archetype glyph, constellation color signature, the line "Here's a true story that never happened." Something that travels beyond the tool. The Deutsch "reach" test made operational. Server-side renderer (HTML-to-image or template). The moment the tool produces something that is for anyone, not just the user.

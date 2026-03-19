@@ -82,10 +82,11 @@ Key backend files (v1):
 - `app/embedding.py` — OpenAI embedding calls, similarity math
 - `app/clustering.py` — cluster assignment, centroid management, seed cluster definitions
 - `app/telegram.py` — Telegram webhook handler, raw JSON parsing (DEC-012)
-- `app/granola.py` — Granola transcript parser (speaker attribution, segment extraction)
+- `app/granola.py` — Granola transcript parser (calls `segment_transcript()` for thematic segmentation, DEC-018)
+- `app/segmentation.py` — Thematic segmentation engine: `Segment` dataclass, `segment_transcript()` (boundary-based prompt with line-numbered transcript, single Claude call per transcript, DEC-019/DEC-020), `generate_event_label()` (standalone label generation for Telegram events), `_create_client()` helper with `timeout=120.0`. Model: claude-sonnet-4-20250514
 - `app/myth.py` — Claude API proxy, prompt construction, caching (build_myth_prompt, should_regenerate, generate_myth, get_or_generate_myth). PROHIBITED_WORDS list enforces ancestral register.
 - `app/models.py` — Pydantic models for request/response validation (includes MythRequest/MythResponse)
-- `app/db.py` — Supabase client, queries (includes get_cluster_by_id, get_cluster_events_labels, get_latest_myth, insert_myth, update_cluster_myth)
+- `app/db.py` — Supabase client, queries (includes get_cluster_by_id, get_cluster_events_labels, get_latest_myth, insert_myth, update_cluster_myth). `insert_event()` accepts optional `participants` parameter
 
 ### Batch Seeding — seed_transcript.py
 CLI tool for batch-seeding events from Granola transcript files. Features: speaker label remapping (e.g., `--map "Speaker A=emma"`), minimum segment length filtering, `--dry-run` mode for preview, and `--date` argument to set `event_date` explicitly for all seeded events. Uses the same embedding/clustering pipeline as the live ingestion paths. Located at `scripts/seed_transcript.py`.
@@ -144,7 +145,8 @@ CREATE TABLE events (
   embedding VECTOR(1536),          -- OpenAI text-embedding-3-small
   cluster_id UUID REFERENCES clusters(id),
   xs FLOAT,                        -- 0.0-1.0 semantic x-position (computed)
-  day INTEGER                      -- days since first event (computed)
+  day INTEGER,                     -- days since first event (computed)
+  participants JSONB DEFAULT '[]'  -- speaker names per segment (DEC-017)
 );
 
 -- Clusters table
@@ -197,12 +199,16 @@ When a new event is stored via Telegram or Granola, the pipeline: (1) embeds the
 Myth text is regenerated when a cluster's event count has changed by 3+ since the last generation (`should_regenerate` in `app/myth.py`). The old myth is preserved in the myths table (revision history). The frontend requests myth text via `/myth` POST endpoint (`MythRequest` → `MythResponse`); the backend checks cache freshness and regenerates if stale.
 
 ### Granola Transcript Parsing
-1. Split transcript on speaker label patterns (`Speaker A:`, `Speaker B:`, etc.)
-2. User maps speaker labels to participant names at upload time
-3. Each speaker turn becomes one event (or multiple if the turn exceeds a length threshold — [To be determined during Sprint 1])
-4. Event label: first 5-7 words of the turn, cleaned
-5. Event note: full turn text
-6. Each event is embedded and clustered independently
+1. Transcript text is sent to `segment_transcript()` from `app/segmentation.py` (DEC-018)
+2. The transcript is line-numbered (L001, L002, ...) and sent to Claude in a single API call (DEC-019)
+3. Claude returns segment boundaries (start_line/end_line) and labels — not verbatim text (DEC-020)
+4. Python slices the original transcript using the boundaries to produce segment text
+5. Boundary validation: start > end, out of range, overlapping segments are rejected
+6. Multi-speaker segments use `participant="shared"` with a `participants` jsonb array listing all contributing speakers (DEC-017)
+7. Each segment is embedded and clustered independently
+
+### Telegram Label Generation
+When a Telegram message arrives, `process_telegram_update()` calls `generate_event_label()` from `app/segmentation.py` to produce a 3-5 word LLM-generated label before insertion. On failure, falls back to `text[:80]`.
 
 ## Deferred Architecture (Layers 3-4)
 
@@ -225,7 +231,8 @@ sasa-zamani/
 │   ├── embedding.py         # OpenAI embedding calls
 │   ├── clustering.py        # Cluster assignment, centroids, seeds
 │   ├── telegram.py          # Telegram webhook handler
-│   ├── granola.py           # Granola transcript parser
+│   ├── granola.py           # Granola transcript parser (thematic segmentation)
+│   ├── segmentation.py      # Thematic segmentation engine + label generation
 │   ├── myth.py              # Claude API proxy, caching
 │   ├── models.py            # Pydantic models
 │   └── db.py                # Supabase client
@@ -250,6 +257,8 @@ sasa-zamani/
 │   ├── test_granola.py       # Granola parser tests
 │   ├── test_myth.py          # Myth generation tests
 │   ├── test_seed_transcript.py # Seed transcript pipeline tests
+│   ├── test_segmentation.py   # Segmentation engine tests
+│   ├── test_backfill_labels.py # Backfill labels script tests
 │   └── test_integration.py   # End-to-end integration tests
 ├── scripts/
 │   ├── __init__.py
@@ -258,6 +267,7 @@ sasa-zamani/
 │   ├── backfill_xs.py        # Backfill xs values for existing events
 │   ├── centroid_matrix.py    # Compute centroid similarity matrix
 │   ├── cluster_sanity.py     # Validate cluster assignment quality
+│   ├── backfill_labels.py    # Retroactive LLM label generation for existing events
 │   └── test_myth_quality.py  # Manual myth quality evaluation (not collected by pytest)
 ├── requirements.txt
 ├── pyproject.toml            # pytest config, marker registration

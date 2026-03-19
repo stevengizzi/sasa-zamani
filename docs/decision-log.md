@@ -367,3 +367,96 @@ Constraint lifted for this specific addition only. `app/models.py` remains on th
 
 **Supersedes:** N/A
 **Cross-References:** DEC-014 (precedent for lifting do-not-modify constraints), DEC-005 (frontend requirements)
+
+---
+
+**DEC-017:** Multi-participant events stored with shared participant + participants array
+**Date:** 2026-03-19
+**Sprint:** 3.5
+**Session:** S1b
+
+**Decision:**
+Events from multi-speaker segments use `participant = "shared"` (triggering shared/gold color) plus a `participants` jsonb array containing all contributing speaker names (e.g., `["steven", "emma", "jessie"]`). Single-speaker segments use the speaker name as `participant` with `participants` containing just that one name.
+
+**Alternatives Rejected:**
+1. Comma-delimited string in participant column: Breaks filtering queries that match on exact participant name.
+2. Junction table for event-participant relationship: Overengineered for 3 participants.
+3. Always use first speaker as participant: Loses the multi-speaker signal that makes shared constellations visible.
+
+**Rationale:**
+Thematic segmentation produces segments with multiple contributing speakers. The existing `participant` TEXT column drives color encoding and filtering in the frontend. Using `participant = "shared"` triggers the gold color and maintains backward compatibility. The `participants` jsonb array preserves per-segment speaker attribution for future per-participant analysis (DEF-020).
+
+**Constraints:**
+Schema migration required: `ALTER TABLE events ADD COLUMN participants JSONB DEFAULT '[]'`. Applied via Supabase SQL editor.
+
+**Supersedes:** N/A
+**Cross-References:** DEC-018 (thematic segmentation), DEF-020 (per-participant attribution deferred)
+
+---
+
+**DEC-018:** Thematic segmentation for both batch seeding and live Granola upload
+**Date:** 2026-03-19
+**Sprint:** 3.5
+**Session:** S2a
+
+**Decision:**
+Both `scripts/seed_transcript.py` and `app/granola.py` call `segment_transcript()` from `app/segmentation.py`. One Claude API call per transcript. Regex-based speaker-turn splitting removed from both paths.
+
+**Alternatives Rejected:**
+1. Segmentation only for batch, keep regex for live: Inconsistent data quality between seed data and live uploads.
+2. Client-side segmentation: Adds frontend complexity, loses server-side control over segmentation quality.
+
+**Rationale:**
+Speaker-turn splitting produced thin, context-free events (one speaker turn per event). Thematic segmentation groups conversational lines by topic, producing richer events that embed and cluster more meaningfully. Applying the same approach to both batch and live paths ensures consistent data quality regardless of ingestion method.
+
+**Constraints:**
+Requires Anthropic API key for Claude calls during ingestion. One API call per transcript (~$0.01-0.05 per transcript at current sizes).
+
+**Supersedes:** N/A
+**Cross-References:** DEC-019 (combined segmentation + label), DEC-020 (boundary-based output), FF-002 (resolved)
+
+---
+
+**DEC-019:** Combined segmentation and label generation in single Claude call
+**Date:** 2026-03-19
+**Sprint:** 3.5
+**Session:** S1a
+
+**Decision:**
+The segmentation prompt instructs Claude to return both segment boundaries and labels in a single JSON response. One API call per transcript produces both deliverables. Separate `generate_event_label()` function exists for Telegram messages (which don't need segmentation).
+
+**Alternatives Rejected:**
+1. Two-pass approach (segment first, then label each segment separately): N+1 API calls per transcript — higher cost and latency.
+2. Labels as post-processing step: Requires additional Claude calls after segmentation is complete.
+
+**Rationale:**
+Claude already has full transcript context during segmentation. Generating a 3-5 word label per segment adds negligible output tokens and eliminates the need for separate labeling calls. For Telegram messages (single events, no segmentation needed), `generate_event_label()` provides standalone label generation.
+
+**Constraints:**
+Label quality depends on the segmentation prompt's instructions. Labels use marginalia register (concise, evocative, 3-5 words).
+
+**Supersedes:** N/A (resolves DEF-019)
+**Cross-References:** DEC-018 (thematic segmentation), FF-005 (resolved)
+
+---
+
+**DEC-020:** Boundary-based segmentation output (line numbers, not verbatim text)
+**Date:** 2026-03-19
+**Sprint:** 3.5
+**Session:** F2
+
+**Decision:**
+Redesign the segmentation prompt to send the transcript with numbered lines (L001, L002, etc.) and have Claude return start_line/end_line boundaries instead of verbatim text. Python slices the original transcript using the boundaries. Added boundary validation (start > end, out of range, overlaps).
+
+**Alternatives Rejected:**
+1. Keep verbatim-text approach with high max_tokens: Wasteful — output is approximately the same size as input. Fragile — JSON containing the full transcript text is prone to truncation and parsing errors. Scales poorly with transcript size.
+2. Chunk transcripts into smaller pieces: Adds complexity and risks splitting themes across chunk boundaries.
+
+**Rationale:**
+The original segmentation prompt (S1a) instructed Claude to return verbatim segment text in the JSON response. This caused max_tokens truncation on large transcripts (80K-136K chars) because the output was approximately the same size as the input. F1 raised max_tokens to 32000 as a stopgap, but the architecture was fundamentally wasteful. Boundary-based output reduces response size to ~1-2% of input, allowing max_tokens to return to 4096. The prompt is now fundamentally scalable regardless of transcript length.
+
+**Constraints:**
+Requires line-numbering the transcript before sending to Claude. Boundary validation must catch: start > end, out of range, overlapping segments.
+
+**Supersedes:** N/A
+**Cross-References:** DEC-018 (thematic segmentation), DEC-019 (combined call)

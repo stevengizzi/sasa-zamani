@@ -7,6 +7,7 @@
 | 1 | Backend Foundation + Data Pipeline | 0 → 93 (90 pass, 3 skip) | 2026-03-18 | DEC-012, DEC-013 |
 | 2 | Frontend Migration | 93 → 123 (118–119 pass, 2–3 skip) | 2026-03-19 | DEC-014 |
 | 3 | Integration Testing + Edge City Demo Prep | 125 → 147 (144 pass, 3 skip) | 2026-03-19 | DEC-015, DEC-016 |
+| 3.5 | Thematic Segmentation + LLM Labels | 147 → 166 (166 pass, 0 skip) | 2026-03-19 | DEC-017, DEC-018, DEC-019, DEC-020 |
 
 ---
 
@@ -124,3 +125,44 @@
 - Integration test teardown FK constraint errors (3 errors in TestSeedClustersIntegration) — pre-existing, not Sprint 3 scope
 
 **Review verdicts:** S1a CONCERNS (resolved), S1b CONCERNS (resolved), S2 CONCERNS (resolved), S3 PASS, S4 CLEAR
+
+---
+
+## Sprint 3.5 — Thematic Segmentation + LLM Labels
+
+**Goal:** Replace speaker-turn splitting with Claude-powered thematic segmentation for transcript ingestion (both batch and live). Generate LLM labels for all event types. Add `participants` jsonb array. Re-seed production with improved data.
+
+**Sessions:** S1a, S1b, S2a, S2b, S3, F1, F2 (7 sessions)
+
+**Test delta:** 147 → 166 (+19 new tests)
+
+**Key outcomes:**
+- Built `app/segmentation.py`: thematic segmentation engine with `Segment` dataclass, `segment_transcript()` (boundary-based prompt with line-numbered transcript), `generate_event_label()` (standalone for Telegram), model claude-sonnet-4-20250514
+- Boundary-based segmentation prompt (DEC-020): Claude returns start_line/end_line instead of verbatim text, Python slices original transcript — reduced output to ~1-2% of input size
+- Combined segmentation + label generation in single Claude call per transcript (DEC-019)
+- Added `participants JSONB DEFAULT '[]'` column to events table (DEC-017): multi-speaker segments use `participant="shared"` + `participants` array
+- Both `scripts/seed_transcript.py` and `app/granola.py` now call `segment_transcript()` — regex speaker-turn splitting removed (DEC-018)
+- Telegram messages get LLM-generated labels via `generate_event_label()` — resolves DEF-019
+- Re-seeded production: 48 events (46 granola, 2 telegram) across 6 clusters
+- Built `scripts/backfill_labels.py` for retroactive label generation
+- New files: `app/segmentation.py`, `scripts/backfill_labels.py`, `tests/test_segmentation.py`, `tests/test_backfill_labels.py`
+
+**Production data (post re-seed):**
+- 48 total events: granola 46, telegram 2
+- By participant: shared 46, steven 2
+- By cluster: The Table 33, What the Body Keeps 10, The Silence 2, The Root 1, The Gate 1, The Hand 1
+
+**Issues resolved during sprint:**
+- F1: max_tokens=4096 truncated Claude response on large transcripts → raised to 32000, timeout=120.0s
+- F2: Verbatim-text prompt architecturally wrong → redesigned to boundary-based (DEC-020), max_tokens back to 4096
+
+**Carry-forwards:**
+- DEF-020: Per-participant attribution for multi-speaker Granola events (currently all participant="shared")
+- DEF-021: 10,243-char segment truncation — three segments hit exactly this length, pipeline limit needs investigation
+
+**Scope changes:**
+- F1 added (unplanned fix session): max_tokens 4096→32000, timeout=120.0
+- F2 added (unplanned fix session): complete prompt redesign to boundary-based (DEC-020)
+- S3 interrupted and restarted when Claude Code modified segmentation.py out of scope; backfill preserved, segmentation reverted, fix sessions ran, then S3 re-seed completed
+
+**Review verdicts:** S1a PASS, S1b PASS, S2a PASS, S2b PASS, F1 PASS, F2 PASS, S3 PASS

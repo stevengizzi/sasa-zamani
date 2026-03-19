@@ -5,14 +5,14 @@
 
 ## Active Sprint
 
-**No active sprint.** Sprint 3 complete. Sprint 4 ready to plan.
+**No active sprint.** Sprint 3.5 complete. Sprint 4 ready to plan.
 
 ## Current State
 
-- **Sprints completed:** 3 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep)
+- **Sprints completed:** 3.5 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep; Thematic Segmentation + LLM Labels)
 - **Active sprint:** None
-- **Next sprint:** 4 (Design Brief Alignment)
-- **Tests:** 147 (144 pass, 3 skip)
+- **Next sprint:** 4 (Data Quality + Significance Filtering)
+- **Tests:** 166 (166 pass, 0 skip)
 - **Infrastructure:** Railway: web-production-0aa47.up.railway.app | Supabase: kngzaasfcbjccivuqbkt.supabase.co | Telegram bot: webhook active at /telegram
 - **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
 
@@ -43,7 +43,8 @@ sasa-zamani/
 │   ├── embedding.py         # OpenAI embedding calls
 │   ├── clustering.py        # Cluster assignment, centroids, seeds
 │   ├── telegram.py          # Telegram webhook handler
-│   ├── granola.py           # Granola transcript parser
+│   ├── granola.py           # Granola transcript parser (thematic segmentation)
+│   ├── segmentation.py      # Thematic segmentation engine + label generation
 │   ├── myth.py              # Claude API proxy, caching
 │   ├── models.py            # Pydantic models
 │   └── db.py                # Supabase client
@@ -61,6 +62,8 @@ sasa-zamani/
 │   ├── test_granola.py      # Granola parser tests
 │   ├── test_myth.py         # Myth generation tests
 │   ├── test_seed_transcript.py # Seed transcript pipeline tests
+│   ├── test_segmentation.py # Segmentation engine tests
+│   ├── test_backfill_labels.py # Backfill labels script tests
 │   └── test_integration.py  # End-to-end integration tests
 ├── scripts/
 │   ├── __init__.py
@@ -69,6 +72,7 @@ sasa-zamani/
 │   ├── backfill_xs.py       # Backfill xs values for existing events
 │   ├── centroid_matrix.py   # Compute centroid similarity matrix
 │   ├── cluster_sanity.py    # Validate cluster assignment quality
+│   ├── backfill_labels.py   # Retroactive LLM label generation for existing events
 │   └── test_myth_quality.py # Manual myth quality evaluation (not collected by pytest)
 ├── requirements.txt
 ├── pyproject.toml           # pytest config, marker registration
@@ -102,7 +106,7 @@ CLUSTER_JOIN_THRESHOLD=0.3
 
 ## Database Schema (Supabase)
 
-Three tables: `events` (id, label, note, participant, source, embedding vector(1536), cluster_id, xs, created_at, event_date), `clusters` (id, name, glyph_id, centroid vector(1536), myth_text, event_count, is_seed), `myths` (cluster_id, text, version, generated_at). pgvector extension enabled. See docs/architecture.md for full DDL.
+Three tables: `events` (id, label, note, participant, source, embedding vector(1536), cluster_id, xs, created_at, event_date, participants jsonb), `clusters` (id, name, glyph_id, centroid vector(1536), myth_text, event_count, is_seed), `myths` (cluster_id, text, version, generated_at). pgvector extension enabled. See docs/architecture.md for full DDL.
 
 ## Key Decisions
 
@@ -117,6 +121,10 @@ Three tables: `events` (id, label, note, participant, source, embedding vector(1
 - DEC-014: Lifted do-not-modify constraint on telegram.py/granola.py for pipeline wiring
 - DEC-015: Atomic increment via Postgres RPC (resolves DEF-010)
 - DEC-016: Lifted do-not-modify on app/models.py for event_date field
+- DEC-017: Multi-participant events: participant="shared" + participants jsonb array
+- DEC-018: Thematic segmentation for batch and live Granola pipelines
+- DEC-019: Combined segmentation + label in single Claude call
+- DEC-020: Boundary-based segmentation output (line numbers, not text)
 
 ## Language Constraints
 
@@ -128,4 +136,4 @@ Jessie: #7F77DD · Emma: #D85A30 · Steven: #1D9E75 · Shared: #BA7517
 
 ## Deferred Items
 
-Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 3 carry-forwards: DEF-017 (myth post-validation), DEF-018 (transcript dedup), DEF-019 (LLM-generated event labels instead of raw text[:80]).
+Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 3 carry-forwards: DEF-017 (myth post-validation), DEF-018 (transcript dedup). Sprint 3.5 carry-forwards: DEF-020 (per-participant attribution for multi-speaker events), DEF-021 (10,243-char segment truncation investigation).

@@ -20,3 +20,7 @@
 | DEC-014 | 2026-03-19 | 2 | Lift do-not-modify constraint on telegram.py/granola.py | Active |
 | DEC-015 | 2026-03-19 | 3 | Atomic increment via Postgres RPC (resolves DEF-010) | Active |
 | DEC-016 | 2026-03-19 | 3 | Lift do-not-modify on app/models.py for event_date | Active |
+| DEC-017 | 2026-03-19 | 3.5 | Multi-participant events: participant="shared" + participants jsonb | Active |
+| DEC-018 | 2026-03-19 | 3.5 | Thematic segmentation for batch and live Granola pipelines | Active |
+| DEC-019 | 2026-03-19 | 3.5 | Combined segmentation + label in single Claude call | Active |
+| DEC-020 | 2026-03-19 | 3.5 | Boundary-based segmentation output (line numbers, not text) | Active |

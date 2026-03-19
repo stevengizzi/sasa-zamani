@@ -17,20 +17,20 @@ The core visualization is the Sasa Map: a canvas-based interface with two views 
 
 ## Current State
 
-**Tests:** 147 (144 pass, 3 skip)
-**Sprints completed:** 3 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep)
+**Tests:** 166 (166 pass, 0 skip)
+**Sprints completed:** 3.5 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep; Thematic Segmentation + LLM Labels)
 **Active sprint:** None
 **Production URL:** https://web-production-0aa47.up.railway.app
 **Database:** https://kngzaasfcbjccivuqbkt.supabase.co
 **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
-**Seeded data:** ~393 events across 6 clusters from 2 Granola transcripts
-**Next sprint:** 4 (Design Brief Alignment)
+**Seeded data:** 48 events (46 granola, 2 telegram) across 6 clusters from 2 Granola transcripts (thematically segmented)
+**Next sprint:** 4 (Data Quality + Significance Filtering)
 
 ## Architecture
 
 Three-tier: static HTML/JS/Canvas frontend → Python/FastAPI backend (Railway) → Supabase (Postgres + pgvector).
 
-Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching (app/myth.py). Frontend fetches live data from /events and /clusters endpoints. Participant color encoding and individual/collective toggle implemented.
+Input sources: Telegram bot webhook + Granola transcript upload. Embedding: OpenAI text-embedding-3-small (1536 dim). Cluster assignment: cosine similarity against cluster centroids, CLUSTER_JOIN_THRESHOLD=0.3. Myth generation: Claude claude-sonnet-4-20250514, server-side proxy with caching (app/myth.py). Thematic segmentation: `app/segmentation.py` — Claude-powered transcript segmentation using line-boundary output (DEC-020) with combined label generation (DEC-019). Frontend fetches live data from /events and /clusters endpoints. Participant color encoding and individual/collective toggle implemented.
 
 See docs/architecture.md for full system diagram, database schema, API endpoints, and file structure.
 
@@ -58,6 +58,10 @@ Python 3.11.8 (local) / 3.13.12 (Railway) · FastAPI · Supabase (Postgres 15 + 
 | DEC-014 | Lift do-not-modify constraint on telegram.py/granola.py | Active |
 | DEC-015 | Atomic increment via Postgres RPC | Active |
 | DEC-016 | Lift do-not-modify on app/models.py for event_date | Active |
+| DEC-017 | Multi-participant events: participant="shared" + participants jsonb | Active |
+| DEC-018 | Thematic segmentation for batch and live Granola pipelines | Active |
+| DEC-019 | Combined segmentation + label in single Claude call | Active |
+| DEC-020 | Boundary-based segmentation output (line numbers, not text) | Active |
 
 See docs/decision-log.md for full rationale, alternatives rejected, and cross-references.
 
