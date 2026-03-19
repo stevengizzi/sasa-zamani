@@ -66,6 +66,7 @@ class TestArchetypeNamingPrompt:
         prohibited = [
             "journey", "transformation", "growth", "powerful", "explore",
             "reflect", "synchronicity", "discover", "reveal", "activation",
+            "detect", "collective unconscious", "universe", "field", "signal",
         ]
         for word in prohibited:
             assert word in ARCHETYPE_NAMING_PROMPT, (

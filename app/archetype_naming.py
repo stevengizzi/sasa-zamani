@@ -27,7 +27,8 @@ Rules:
 - The name should follow the pattern "The [Noun]" or a short noun-phrase
 - Write in the register of a scholar's margin note: precise, ancestral, not vague
 - Never use: journey, transformation, growth, powerful, explore, reflect, \
-synchronicity, discover, reveal, activation
+synchronicity, discover, reveal, activation, detect, collective unconscious, \
+universe, field, signal
 - The name should feel found rather than made — as if it already existed and \
 you are recognizing it
 - Return ONLY the archetype name, nothing else
