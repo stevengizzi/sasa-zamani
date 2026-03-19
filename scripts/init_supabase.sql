@@ -26,7 +26,8 @@ CREATE TABLE events (
   embedding VECTOR(1536),
   cluster_id UUID REFERENCES clusters(id),
   xs FLOAT,
-  day INTEGER
+  day INTEGER,
+  participants JSONB DEFAULT '[]'
 );
 
 -- Myths history

@@ -61,6 +61,7 @@ def insert_event(
     cluster_id: str | None = None,
     xs: float | None = None,
     event_date: str | None = None,
+    participants: list[str] | None = None,
 ) -> dict:
     """Insert a new event and return the inserted row."""
     data: dict = {
@@ -76,6 +77,8 @@ def insert_event(
         data["xs"] = xs
     if event_date is not None:
         data["event_date"] = event_date
+    if participants is not None:
+        data["participants"] = participants
     response = get_db().table("events").insert(data).execute()
     return response.data[0]
 
@@ -88,7 +91,7 @@ def update_event_xs(event_id: str, xs: float) -> None:
 def get_events(participant: str | None = None) -> list[dict]:
     """Return events without embedding field. Optionally filter by participant (case-insensitive)."""
     query = get_db().table("events").select(
-        "id, created_at, event_date, label, note, participant, source, cluster_id, xs, day"
+        "id, created_at, event_date, label, note, participant, source, cluster_id, xs, day, participants"
     )
     if participant is not None:
         query = query.ilike("participant", participant)

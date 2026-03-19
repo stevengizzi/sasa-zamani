@@ -347,3 +347,60 @@ async def test_increment_event_count_from_zero(mock_supabase):
     increment_event_count("cl-zero")
 
     mock_supabase.rpc.assert_called_once_with("increment_event_count", {"cid": "cl-zero"})
+
+
+# --- participants ---
+
+
+async def test_insert_event_with_participants(mock_supabase):
+    fake_event = {"id": "evt-part", "label": "collab", "participants": ["steven", "emma"]}
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    insert_event(
+        label="collab",
+        note="paired session",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="granola",
+        participants=["steven", "emma"],
+    )
+
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert data_dict["participants"] == ["steven", "emma"]
+
+
+async def test_insert_event_without_participants(mock_supabase):
+    fake_event = {"id": "evt-nopart", "label": "solo", "participants": None}
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    insert_event(
+        label="solo",
+        note="solo entry",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="telegram",
+    )
+
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert "participants" not in data_dict
+
+
+async def test_event_response_includes_participants():
+    from app.models import EventResponse
+
+    event = EventResponse(
+        id="00000000-0000-0000-0000-000000000001",
+        label="test",
+        note="test note",
+        participant="steven",
+        cluster_id=None,
+        created_at="2026-03-19T00:00:00Z",
+        source="telegram",
+        participants=["steven", "emma"],
+    )
+    data = event.model_dump()
+    assert data["participants"] == ["steven", "emma"]
