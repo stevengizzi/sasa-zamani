@@ -2,16 +2,24 @@
 
 import logging
 
-from app.clustering import assign_cluster, compute_xs
+from app.archetype_naming import maybe_name_cluster
+from app.clustering import assign_or_create_cluster, compute_xs
+from app.config import get_settings
 from app.db import (
     get_cluster_by_id,
     get_cluster_centroids,
     increment_event_count,
     insert_event,
+    insert_raw_input,
     update_event_xs,
 )
 from app.embedding import EmbeddingError, embed_text
-from app.segmentation import SegmentationError, segment_transcript
+from app.segmentation import (
+    SegmentationError,
+    dedup_labels,
+    filter_by_significance,
+    segment_transcript,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +51,31 @@ def process_granola_upload(
     if speaker_map is None:
         speaker_map = SPEAKER_MAP
 
+    # 1. Store transcript
+    raw_input_row = insert_raw_input(
+        text=transcript,
+        source="granola",
+        source_metadata={
+            "speaker_map": speaker_map,
+            "default_participant": default_participant,
+        },
+    )
+    raw_input_id = raw_input_row["id"]
+
+    # 2. Segment
     segments = segment_transcript(transcript, speaker_map, default_participant)
     if len(segments) == 0:
         raise ValueError("Empty transcript")
 
-    # Embed all segments first — fail fast before any DB writes
+    # 3. Dedup labels
+    segments = dedup_labels(segments)
+
+    # 4. Filter by significance
+    segments = filter_by_significance(segments, get_settings().significance_threshold)
+    if len(segments) == 0:
+        raise ValueError("Empty transcript")
+
+    # 5. Embed filtered segments — fail fast before any DB writes
     embeddings = []
     for segment in segments:
         try:
@@ -68,13 +96,18 @@ def process_granola_upload(
         )
         participants = segment.participants
 
-        cluster_id, similarity = assign_cluster(embedding, centroids)
+        # 6. Assign or create cluster
+        cluster_id, similarity, created = assign_or_create_cluster(embedding, centroids)
+        if created:
+            centroids = get_cluster_centroids()
         logger.info(
-            "Granola segment assigned to cluster %s (similarity=%.4f)",
+            "Granola segment assigned to cluster %s (similarity=%.4f, created=%s)",
             cluster_id,
             similarity,
+            created,
         )
 
+        # 7. Insert event with new fields
         row = insert_event(
             label=segment.label,
             note=segment.text,
@@ -83,14 +116,26 @@ def process_granola_upload(
             source="granola",
             cluster_id=cluster_id,
             participants=participants,
+            raw_input_id=raw_input_id,
+            start_line=segment.start_line,
+            end_line=segment.end_line,
         )
 
+        # 8. Post-insert: increment, name, xs
         try:
             increment_event_count(cluster_id)
         except Exception as exc:
             logger.warning(
                 "increment_event_count failed for cluster %s after event %s was inserted: %s",
                 cluster_id, row.get("id"), exc,
+            )
+
+        try:
+            maybe_name_cluster(cluster_id)
+        except Exception as exc:
+            logger.warning(
+                "maybe_name_cluster failed for cluster %s: %s",
+                cluster_id, exc,
             )
 
         cluster = get_cluster_by_id(cluster_id)

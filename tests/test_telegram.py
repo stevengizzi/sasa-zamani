@@ -186,6 +186,7 @@ def test_is_duplicate_second_call_returns_true():
 FAKE_EMBEDDING = [0.1] * 1536
 FAKE_CLUSTER_ID = str(uuid4())
 FAKE_EVENT_ID = str(uuid4())
+FAKE_RAW_INPUT_ID = str(uuid4())
 
 
 def test_process_skips_non_text():
@@ -204,12 +205,15 @@ def test_process_skips_duplicate():
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-@patch("app.telegram.generate_event_label", return_value="a meaningful moment")
-def test_process_full_pipeline(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("a meaningful moment", 0.9))
+def test_process_full_pipeline(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     update = _make_update(text="a meaningful moment", update_id=777)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -221,12 +225,15 @@ def test_process_full_pipeline(mock_label, mock_embed, mock_centroids, mock_inse
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-@patch("app.telegram.generate_event_label", return_value="a meaningful moment")
-def test_process_pipeline_computes_xs(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("a meaningful moment", 0.9))
+def test_process_pipeline_computes_xs(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     update = _make_update(text="a meaningful moment", update_id=778)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -237,12 +244,15 @@ def test_process_pipeline_computes_xs(mock_label, mock_embed, mock_centroids, mo
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Table", "event_count": 3})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-@patch("app.telegram.generate_event_label", return_value="dinner together")
-def test_process_pipeline_increments_event_count(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("dinner together", 0.8))
+def test_process_pipeline_increments_event_count(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     update = _make_update(text="dinner together", update_id=779)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -250,8 +260,10 @@ def test_process_pipeline_increments_event_count(mock_label, mock_embed, mock_ce
     mock_cluster.assert_called_once_with(FAKE_CLUSTER_ID)
 
 
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("some label", 0.9))
 @patch("app.telegram.embed_text", side_effect=__import__("app.embedding", fromlist=["EmbeddingError"]).EmbeddingError("fail"))
-def test_process_embedding_failure(mock_embed):
+def test_process_embedding_failure(mock_embed, mock_label, mock_raw):
     update = _make_update(update_id=888)
     result = process_telegram_update(update)
     assert result["processed"] is False
@@ -260,12 +272,15 @@ def test_process_embedding_failure(mock_embed):
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count", side_effect=RuntimeError("RPC failed"))
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-@patch("app.telegram.generate_event_label", return_value="still works")
-def test_telegram_increment_failure_event_survives(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("still works", 0.9))
+def test_telegram_increment_failure_event_survives(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     update = _make_update(text="still works", update_id=890)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -278,12 +293,15 @@ def test_telegram_increment_failure_event_survives(mock_label, mock_embed, mock_
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-@patch("app.telegram.generate_event_label", return_value="Morning coffee ritual")
-def test_telegram_uses_llm_label(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("Morning coffee ritual", 0.7))
+def test_telegram_uses_llm_label(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     update = _make_update(text="Had my morning coffee on the porch", update_id=900)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -293,12 +311,15 @@ def test_telegram_uses_llm_label(mock_label, mock_embed, mock_centroids, mock_in
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
 @patch("app.telegram.generate_event_label", side_effect=SegmentationError("API down"))
-def test_telegram_label_failure_falls_back(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+def test_telegram_label_failure_falls_back(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     msg = "Had my morning coffee on the porch"
     update = _make_update(text=msg, update_id=901)
     result = process_telegram_update(update)
@@ -309,12 +330,15 @@ def test_telegram_label_failure_falls_back(mock_label, mock_embed, mock_centroid
 
 @patch("app.telegram.update_event_xs")
 @patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
 @patch("app.telegram.increment_event_count")
 @patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
 @patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
 @patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
-@patch("app.telegram.generate_event_label", return_value="Exact label passed through")
-def test_telegram_label_content_passed_through(mock_label, mock_embed, mock_centroids, mock_insert, mock_incr, mock_cluster, mock_xs):
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("Exact label passed through", 0.8))
+def test_telegram_label_content_passed_through(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
     update = _make_update(text="some message text", update_id=902)
     result = process_telegram_update(update)
     assert result["processed"] is True
@@ -339,6 +363,164 @@ def test_dedup_set_oldest_evicted():
     is_duplicate(10_001)
     assert is_duplicate(1) is False  # evicted, so not a duplicate
     assert is_duplicate(10_000) is True  # still retained
+
+
+# --- new pipeline tests (Session 5) ---
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("stored in raw", 0.9))
+def test_process_stores_message_in_raw_inputs(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="store me", update_id=1100)
+    result = process_telegram_update(update)
+    mock_raw.assert_called_once_with(
+        text="store me",
+        source="telegram",
+        source_metadata={"update_id": 1100, "participant": "unknown"},
+    )
+    assert result["raw_input_id"] == FAKE_RAW_INPUT_ID
+
+
+@patch("app.telegram.get_settings")
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("low sig label", 0.1))
+def test_process_below_significance_no_event(mock_label, mock_raw, mock_settings):
+    mock_settings.return_value.significance_threshold = 0.3
+    update = _make_update(text="just logistics", update_id=1101)
+    result = process_telegram_update(update)
+    assert result["processed"] is False
+    assert result["reason"] == "below_significance"
+    assert result["event_id"] is None
+    assert result["raw_input_id"] == FAKE_RAW_INPUT_ID
+    mock_raw.assert_called_once()
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("above sig", 0.9))
+def test_process_above_significance_creates_event_with_raw_input_id(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="meaningful text", update_id=1102)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    assert result["raw_input_id"] == FAKE_RAW_INPUT_ID
+    assert mock_insert.call_args[1]["raw_input_id"] == FAKE_RAW_INPUT_ID
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("tuple label", 0.75))
+def test_process_handles_generate_event_label_tuple(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="tuple test", update_id=1103)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    assert mock_insert.call_args[1]["label"] == "tuple label"
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("cluster test", 0.9))
+def test_process_uses_assign_or_create_cluster(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="cluster me", update_id=1104)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_assign.assert_called_once()
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("naming test", 0.9))
+def test_process_calls_maybe_name_cluster(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="name the cluster", update_id=1105)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    mock_name.assert_called_once_with(FAKE_CLUSTER_ID)
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", side_effect=SegmentationError("API fail"))
+def test_process_label_fallback_uses_significance_1(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="fallback significance", update_id=1106)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    assert mock_insert.call_args[1]["label"] == "fallback significance"[:80]
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster", side_effect=RuntimeError("naming failed"))
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", return_value={"id": FAKE_RAW_INPUT_ID})
+@patch("app.telegram.generate_event_label", return_value=("naming error test", 0.9))
+def test_process_maybe_name_cluster_failure_non_blocking(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="naming error", update_id=1107)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    assert result["event_id"] == FAKE_EVENT_ID
+
+
+@patch("app.telegram.update_event_xs")
+@patch("app.telegram.get_cluster_by_id", return_value={"name": "The Gate", "event_count": 1})
+@patch("app.telegram.maybe_name_cluster")
+@patch("app.telegram.increment_event_count")
+@patch("app.telegram.insert_event", return_value={"id": FAKE_EVENT_ID})
+@patch("app.telegram.assign_or_create_cluster", return_value=(FAKE_CLUSTER_ID, 0.85, False))
+@patch("app.telegram.get_cluster_centroids", return_value=[(FAKE_CLUSTER_ID, [0.1] * 1536)])
+@patch("app.telegram.embed_text", return_value=FAKE_EMBEDDING)
+@patch("app.telegram.insert_raw_input", side_effect=RuntimeError("DB error"))
+@patch("app.telegram.generate_event_label", return_value=("raw fail test", 0.9))
+def test_process_raw_input_failure_non_blocking(mock_label, mock_raw, mock_embed, mock_centroids, mock_assign, mock_insert, mock_incr, mock_name, mock_cluster, mock_xs):
+    update = _make_update(text="raw input fails", update_id=1108)
+    result = process_telegram_update(update)
+    assert result["processed"] is True
+    assert result["raw_input_id"] is None
 
 
 # --- POST /telegram endpoint ---

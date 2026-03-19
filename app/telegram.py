@@ -3,12 +3,15 @@
 import logging
 from collections import OrderedDict
 
-from app.clustering import assign_cluster, compute_xs
+from app.archetype_naming import maybe_name_cluster
+from app.clustering import assign_or_create_cluster, compute_xs
+from app.config import get_settings
 from app.db import (
     get_cluster_by_id,
     get_cluster_centroids,
     increment_event_count,
     insert_event,
+    insert_raw_input,
     update_event_xs,
 )
 from app.embedding import EmbeddingError, embed_text
@@ -95,43 +98,64 @@ def is_duplicate(update_id: int) -> bool:
 
 
 def process_telegram_update(update: dict) -> dict:
-    """Full pipeline: extract → check duplicate → embed → assign cluster → store in DB.
+    """Full pipeline: extract → dedup → label+sig → store raw → filter → embed → assign/create → insert → name.
 
-    Returns a status dict with keys: processed, reason, event_id.
+    Returns a status dict with keys: processed, reason, event_id, raw_input_id.
     """
     extracted = extract_message(update)
     if extracted is None:
-        return {"processed": False, "reason": "not_text_message", "event_id": None}
+        return {"processed": False, "reason": "not_text_message", "event_id": None, "raw_input_id": None}
 
     text, participant, update_id = extracted
 
     if is_duplicate(update_id):
-        return {"processed": False, "reason": "duplicate", "event_id": None}
+        return {"processed": False, "reason": "duplicate", "event_id": None, "raw_input_id": None}
+
+    try:
+        label, significance = generate_event_label(text)
+    except (SegmentationError, Exception) as exc:
+        logger.warning("Label generation failed: %s — falling back to text[:80]", exc)
+        label = text[:80]
+        significance = 1.0
+
+    raw_input_id = None
+    try:
+        raw_row = insert_raw_input(
+            text=text,
+            source="telegram",
+            source_metadata={"update_id": update_id, "participant": participant},
+        )
+        raw_input_id = raw_row["id"]
+    except Exception as exc:
+        logger.warning("insert_raw_input failed for update_id=%s: %s", update_id, exc)
+
+    if significance < get_settings().significance_threshold:
+        return {
+            "processed": False,
+            "reason": "below_significance",
+            "event_id": None,
+            "raw_input_id": raw_input_id,
+        }
 
     try:
         embedding = embed_text(text)
     except EmbeddingError as exc:
         logger.error("Embedding failed for update_id=%s: %s", update_id, exc)
-        return {"processed": False, "reason": "embedding_failed", "event_id": None}
+        return {"processed": False, "reason": "embedding_failed", "event_id": None, "raw_input_id": raw_input_id}
 
     try:
         centroids = get_cluster_centroids()
-        cluster_id, similarity = assign_cluster(embedding, centroids)
+        cluster_id, similarity, created = assign_or_create_cluster(embedding, centroids)
         logger.info(
-            "Assigned update_id=%s to cluster %s (similarity=%.4f)",
+            "Assigned update_id=%s to cluster %s (similarity=%.4f, created=%s)",
             update_id,
             cluster_id,
             similarity,
+            created,
         )
     except Exception as exc:
         logger.error("Cluster assignment failed for update_id=%s: %s", update_id, exc)
-        return {"processed": False, "reason": "cluster_failed", "event_id": None}
-
-    try:
-        label = generate_event_label(text)
-    except (SegmentationError, Exception) as exc:
-        logger.warning("Label generation failed: %s — falling back to text[:80]", exc)
-        label = text[:80]
+        return {"processed": False, "reason": "cluster_failed", "event_id": None, "raw_input_id": raw_input_id}
 
     try:
         row = insert_event(
@@ -141,10 +165,11 @@ def process_telegram_update(update: dict) -> dict:
             embedding=embedding,
             source="telegram",
             cluster_id=cluster_id,
+            raw_input_id=raw_input_id,
         )
     except Exception as exc:
         logger.error("DB write failed for update_id=%s: %s", update_id, exc)
-        return {"processed": False, "reason": "db_failed", "event_id": None}
+        return {"processed": False, "reason": "db_failed", "event_id": None, "raw_input_id": raw_input_id}
 
     try:
         increment_event_count(cluster_id)
@@ -155,6 +180,11 @@ def process_telegram_update(update: dict) -> dict:
         )
 
     try:
+        maybe_name_cluster(cluster_id)
+    except Exception as exc:
+        logger.warning("maybe_name_cluster failed for cluster %s: %s", cluster_id, exc)
+
+    try:
         cluster = get_cluster_by_id(cluster_id)
         if cluster is not None:
             event_count = cluster["event_count"]
@@ -163,4 +193,4 @@ def process_telegram_update(update: dict) -> dict:
     except Exception as exc:
         logger.warning("xs computation failed for event %s: %s", row.get("id"), exc)
 
-    return {"processed": True, "reason": "ok", "event_id": row.get("id")}
+    return {"processed": True, "reason": "ok", "event_id": row.get("id"), "raw_input_id": raw_input_id}
