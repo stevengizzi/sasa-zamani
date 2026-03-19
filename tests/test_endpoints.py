@@ -138,3 +138,63 @@ def test_cluster_response_validates():
     )
     assert cluster.name == "The Gate"
     assert cluster.event_count == 5
+
+
+# --- New model fields (Sprint 2 S1) ---
+
+
+def test_event_response_serializes_xs_and_day():
+    event = EventResponse(
+        id=uuid4(),
+        label="test",
+        note=None,
+        participant="steven",
+        cluster_id=None,
+        created_at="2026-03-18T00:00:00Z",
+        source="telegram",
+        xs=0.35,
+        day=7,
+    )
+    data = event.model_dump()
+    assert data["xs"] == 0.35
+    assert data["day"] == 7
+
+
+def test_event_response_xs_day_default_none():
+    event = EventResponse(
+        id=uuid4(),
+        label="test",
+        note=None,
+        participant="steven",
+        cluster_id=None,
+        created_at="2026-03-18T00:00:00Z",
+        source="telegram",
+    )
+    assert event.xs is None
+    assert event.day is None
+
+
+def test_cluster_response_serializes_new_fields():
+    cluster = ClusterResponse(
+        id=uuid4(),
+        name="The Gate",
+        event_count=5,
+        glyph_id="gate",
+        myth_text="The door remembers who passed through.",
+        is_seed=True,
+    )
+    data = cluster.model_dump()
+    assert data["glyph_id"] == "gate"
+    assert data["myth_text"] == "The door remembers who passed through."
+    assert data["is_seed"] is True
+
+
+def test_cluster_response_new_fields_default():
+    cluster = ClusterResponse(
+        id=uuid4(),
+        name="The Gate",
+        event_count=5,
+    )
+    assert cluster.glyph_id is None
+    assert cluster.myth_text is None
+    assert cluster.is_seed is False

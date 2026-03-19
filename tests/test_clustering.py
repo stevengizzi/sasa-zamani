@@ -12,8 +12,10 @@ from dotenv import dotenv_values
 
 from app.clustering import (
     SEED_ARCHETYPES,
+    XS_CENTERS,
     assign_cluster,
     compute_seed_centroids,
+    compute_xs,
     cosine_similarity,
     seed_clusters,
 )
@@ -136,6 +138,49 @@ class TestSeedArchetypes:
             assert "representative_text" in archetype
             assert isinstance(archetype["representative_text"], str)
             assert len(archetype["representative_text"]) > 20
+
+
+# ---------------------------------------------------------------------------
+# compute_xs
+# ---------------------------------------------------------------------------
+
+class TestComputeXs:
+    EXPECTED_CENTERS = {
+        "The Gate": 0.12,
+        "The Silence": 0.15,
+        "The Hand": 0.25,
+        "The Root": 0.38,
+        "What the Body Keeps": 0.50,
+        "The Table": 0.82,
+    }
+
+    def test_returns_correct_center_for_each_seed(self) -> None:
+        for name, expected_center in self.EXPECTED_CENTERS.items():
+            result = compute_xs(name, 0, 1)
+            assert abs(result - expected_center) < 0.01, (
+                f"{name}: expected ~{expected_center}, got {result}"
+            )
+
+    def test_unknown_cluster_defaults_to_050(self) -> None:
+        result = compute_xs("Unknown Future Cluster", 0, 1)
+        assert abs(result - 0.50) < 0.01
+
+    def test_output_in_valid_range(self) -> None:
+        for name in list(XS_CENTERS.keys()) + ["Unknown"]:
+            for count in [1, 5, 20, 100]:
+                for index in range(count):
+                    result = compute_xs(name, index, count)
+                    assert 0.0 <= result <= 1.0, (
+                        f"Out of range for {name} idx={index} count={count}: {result}"
+                    )
+
+    def test_different_indices_produce_different_values(self) -> None:
+        values = [compute_xs("The Gate", i, 5) for i in range(5)]
+        assert len(set(values)) == 5, f"Expected 5 unique values, got {values}"
+
+    def test_deterministic(self) -> None:
+        results = [compute_xs("The Root", 3, 10) for _ in range(10)]
+        assert all(r == results[0] for r in results)
 
 
 # ---------------------------------------------------------------------------

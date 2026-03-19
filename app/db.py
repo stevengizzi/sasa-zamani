@@ -57,6 +57,7 @@ def insert_event(
     embedding: list[float],
     source: str,
     cluster_id: str | None = None,
+    xs: float | None = None,
 ) -> dict:
     """Insert a new event and return the inserted row."""
     data: dict = {
@@ -68,8 +69,15 @@ def insert_event(
     }
     if cluster_id is not None:
         data["cluster_id"] = cluster_id
+    if xs is not None:
+        data["xs"] = xs
     response = get_db().table("events").insert(data).execute()
     return response.data[0]
+
+
+def update_event_xs(event_id: str, xs: float) -> None:
+    """Update the xs value for an existing event (used by backfill)."""
+    get_db().table("events").update({"xs": xs}).eq("id", event_id).execute()
 
 
 def get_events(participant: str | None = None) -> list[dict]:

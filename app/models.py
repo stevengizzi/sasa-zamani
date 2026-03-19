@@ -14,12 +14,17 @@ class EventResponse(BaseModel):
     cluster_id: UUID | None
     created_at: datetime
     source: str
+    xs: float | None = None
+    day: int | None = None
 
 
 class ClusterResponse(BaseModel):
     id: UUID
     name: str
     event_count: int
+    glyph_id: str | None = None
+    myth_text: str | None = None
+    is_seed: bool = False
 
 
 class HealthResponse(BaseModel):

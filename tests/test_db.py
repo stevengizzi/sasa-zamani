@@ -116,6 +116,36 @@ async def test_insert_event_and_get_events_roundtrip(mock_supabase):
     assert "embedding" not in events[0]
 
 
+async def test_insert_event_stores_xs_when_provided(mock_supabase):
+    fake_event = {
+        "id": "evt-xs",
+        "label": "test xs",
+        "note": "test",
+        "participant": "steven",
+        "source": "telegram",
+        "cluster_id": "cl-1",
+        "xs": 0.35,
+    }
+    insert_chain = _chain(mock_supabase, "events").insert.return_value
+    insert_chain.execute.return_value = MagicMock(data=[fake_event])
+
+    result = insert_event(
+        label="test xs",
+        note="test",
+        participant="steven",
+        embedding=[0.1] * 1536,
+        source="telegram",
+        cluster_id="cl-1",
+        xs=0.35,
+    )
+    assert result["xs"] == 0.35
+
+    # Verify xs was included in the data dict passed to insert
+    call_args = _chain(mock_supabase, "events").insert.call_args
+    data_dict = call_args[0][0]
+    assert data_dict["xs"] == 0.35
+
+
 async def test_get_events_with_participant_filter(mock_supabase):
     fake_events = [
         {"id": "evt-2", "label": "coffee", "participant": "emma"},

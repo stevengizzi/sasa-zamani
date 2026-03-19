@@ -1,5 +1,6 @@
 """Cluster assignment, centroid management, and seed cluster definitions."""
 
+import hashlib
 import logging
 import math
 
@@ -64,6 +65,46 @@ SEED_ARCHETYPES = [
         ),
     },
 ]
+
+
+XS_CENTERS: dict[str, float] = {
+    "The Gate": 0.12,
+    "The Silence": 0.15,
+    "The Hand": 0.25,
+    "The Root": 0.38,
+    "What the Body Keeps": 0.50,
+    "The Table": 0.82,
+}
+
+_XS_SPREAD = 0.06
+_DEFAULT_XS_CENTER = 0.50
+
+
+def compute_xs(cluster_name: str, event_index: int, cluster_event_count: int) -> float:
+    """Compute the semantic x-position for an event within its cluster.
+
+    Maps cluster name to a canonical center on the inward-social spectrum,
+    then applies a per-event offset with deterministic jitter so events
+    within the same cluster spread out rather than stacking.
+    """
+    if not isinstance(cluster_name, str):
+        raise TypeError(f"cluster_name must be a str, got {type(cluster_name).__name__}")
+    if not isinstance(event_index, int) or not isinstance(cluster_event_count, int):
+        raise TypeError("event_index and cluster_event_count must be ints")
+
+    center = XS_CENTERS.get(cluster_name, _DEFAULT_XS_CENTER)
+
+    if cluster_event_count <= 1:
+        offset = 0.0
+    else:
+        offset = _XS_SPREAD * (2 * event_index / (cluster_event_count - 1) - 1)
+
+    jitter_input = f"{cluster_name}:{event_index}".encode()
+    jitter_hash = int(hashlib.sha256(jitter_input).hexdigest()[:8], 16)
+    jitter = (jitter_hash / 0xFFFFFFFF - 0.5) * 0.01
+
+    result = center + offset + jitter
+    return max(0.0, min(1.0, result))
 
 
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
