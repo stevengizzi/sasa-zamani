@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_key: str
     openai_api_key: str
+    anthropic_api_key: str
     telegram_bot_token: str
     cluster_join_threshold: float = 0.3
 

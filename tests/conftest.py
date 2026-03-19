@@ -14,6 +14,7 @@ def mock_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUPABASE_KEY", "fake-supabase-key")
     monkeypatch.setenv("OPENAI_API_KEY", "fake-openai-key")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "fake-telegram-token")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-anthropic-key")
 
 
 @pytest.fixture

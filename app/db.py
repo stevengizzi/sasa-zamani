@@ -147,3 +147,62 @@ def increment_event_count(cluster_id: str) -> None:
     )
     new_count = row.data["event_count"] + 1
     client.table("clusters").update({"event_count": new_count}).eq("id", cluster_id).execute()
+
+
+def get_cluster_by_id(cluster_id: str) -> dict | None:
+    """Return a single cluster by ID, or None if not found."""
+    response = (
+        get_db()
+        .table("clusters")
+        .select("id, name, glyph_id, myth_text, myth_version, event_count, last_updated, is_seed")
+        .eq("id", cluster_id)
+        .execute()
+    )
+    if response.data:
+        return response.data[0]
+    return None
+
+
+def get_cluster_events_labels(cluster_id: str) -> list[str]:
+    """Return event labels for a cluster."""
+    response = (
+        get_db()
+        .table("events")
+        .select("label")
+        .eq("cluster_id", cluster_id)
+        .execute()
+    )
+    return [row["label"] for row in response.data]
+
+
+def get_latest_myth(cluster_id: str) -> dict | None:
+    """Return the most recent myth entry for a cluster, or None if none exist."""
+    response = (
+        get_db()
+        .table("myths")
+        .select("*")
+        .eq("cluster_id", cluster_id)
+        .order("version", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if response.data:
+        return response.data[0]
+    return None
+
+
+def insert_myth(cluster_id: str, text: str, event_count: int, version: int) -> dict:
+    """Insert a new myth entry and return the inserted row."""
+    data = {
+        "cluster_id": cluster_id,
+        "text": text,
+        "event_count_at_generation": event_count,
+        "version": version,
+    }
+    response = get_db().table("myths").insert(data).execute()
+    return response.data[0]
+
+
+def update_cluster_myth(cluster_id: str, myth_text: str) -> None:
+    """Update a cluster's myth_text field."""
+    get_db().table("clusters").update({"myth_text": myth_text}).eq("id", cluster_id).execute()
