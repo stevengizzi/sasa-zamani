@@ -15,6 +15,13 @@ from app.segmentation import (
 
 SPEAKER_MAP = {"Speaker A": "steven", "Speaker B": "jessie", "Speaker C": "emma"}
 
+SAMPLE_TRANSCRIPT = """Speaker A: Let's talk about the project
+Speaker A: I think we should start with the backend
+Speaker B: I agree, the API needs work
+Speaker B: We should also consider the database
+Speaker A: Good point about the database
+Speaker B: Let's plan the frontend next"""
+
 
 def _mock_claude_response(text: str) -> MagicMock:
     """Build a mock Anthropic messages.create response."""
@@ -27,17 +34,20 @@ def _mock_claude_response(text: str) -> MagicMock:
 
 THREE_SEGMENTS = json.dumps([
     {
-        "text": "We should revisit the clustering approach.",
+        "start_line": 1,
+        "end_line": 2,
         "label": "Revisiting clustering strategy",
         "speakers": ["Speaker A"],
     },
     {
-        "text": "The embeddings look good but centroids drift over time.",
+        "start_line": 3,
+        "end_line": 4,
         "label": "Centroid drift observation",
         "speakers": ["Speaker B"],
     },
     {
-        "text": "Let's schedule a review next week.",
+        "start_line": 5,
+        "end_line": 6,
         "label": "Planning review session",
         "speakers": ["Speaker C"],
     },
@@ -53,12 +63,11 @@ class TestSegmentTranscript:
         mock_client.messages.create.return_value = _mock_claude_response(THREE_SEGMENTS)
         mock_client_factory.return_value = mock_client
 
-        result = segment_transcript("fake transcript", SPEAKER_MAP)
+        result = segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
 
         assert len(result) == 3
         assert all(isinstance(s, Segment) for s in result)
         assert result[0].label == "Revisiting clustering strategy"
-        assert result[0].text == "We should revisit the clustering approach."
         assert result[0].participants == ["steven"]
         assert result[1].participants == ["jessie"]
         assert result[2].participants == ["emma"]
@@ -67,7 +76,8 @@ class TestSegmentTranscript:
     def test_segment_multi_speaker_attribution(self, mock_client_factory):
         multi_speaker = json.dumps([
             {
-                "text": "Both discussed the timeline.",
+                "start_line": 1,
+                "end_line": 6,
                 "label": "Timeline discussion",
                 "speakers": ["Speaker A", "Speaker B"],
             },
@@ -76,7 +86,7 @@ class TestSegmentTranscript:
         mock_client.messages.create.return_value = _mock_claude_response(multi_speaker)
         mock_client_factory.return_value = mock_client
 
-        result = segment_transcript("fake transcript", SPEAKER_MAP)
+        result = segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
 
         assert len(result) == 1
         assert result[0].participants == ["steven", "jessie"]
@@ -85,7 +95,8 @@ class TestSegmentTranscript:
     def test_segment_single_speaker(self, mock_client_factory):
         single = json.dumps([
             {
-                "text": "Solo thought on architecture.",
+                "start_line": 1,
+                "end_line": 6,
                 "label": "Architecture musings",
                 "speakers": ["Speaker A"],
             },
@@ -94,7 +105,7 @@ class TestSegmentTranscript:
         mock_client.messages.create.return_value = _mock_claude_response(single)
         mock_client_factory.return_value = mock_client
 
-        result = segment_transcript("fake transcript", SPEAKER_MAP)
+        result = segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
 
         assert len(result) == 1
         assert result[0].participants == ["steven"]
@@ -103,7 +114,8 @@ class TestSegmentTranscript:
     def test_segment_unmapped_speaker_defaults(self, mock_client_factory):
         unmapped = json.dumps([
             {
-                "text": "Unknown person spoke.",
+                "start_line": 1,
+                "end_line": 6,
                 "label": "Unknown contribution",
                 "speakers": ["Speaker Z"],
             },
@@ -112,7 +124,7 @@ class TestSegmentTranscript:
         mock_client.messages.create.return_value = _mock_claude_response(unmapped)
         mock_client_factory.return_value = mock_client
 
-        result = segment_transcript("fake transcript", SPEAKER_MAP, default_participant="shared")
+        result = segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP, default_participant="shared")
 
         assert result[0].participants == ["shared"]
 
@@ -144,10 +156,100 @@ class TestSegmentTranscript:
         mock_client.messages.create.return_value = _mock_claude_response(THREE_SEGMENTS)
         mock_client_factory.return_value = mock_client
 
-        segment_transcript("fake transcript", SPEAKER_MAP)
+        segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["max_tokens"] == 32000
+        assert call_kwargs["max_tokens"] == 4096
+
+    @patch("app.segmentation._create_client")
+    def test_segment_boundary_validation_start_gt_end(self, mock_client_factory):
+        bad_range = json.dumps([
+            {
+                "start_line": 5,
+                "end_line": 2,
+                "label": "Bad range",
+                "speakers": ["Speaker A"],
+            },
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(bad_range)
+        mock_client_factory.return_value = mock_client
+
+        with pytest.raises(SegmentationError, match="start_line 5 > end_line 2"):
+            segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
+
+    @patch("app.segmentation._create_client")
+    def test_segment_boundary_validation_out_of_range(self, mock_client_factory):
+        out_of_range = json.dumps([
+            {
+                "start_line": 1,
+                "end_line": 100,
+                "label": "Way too far",
+                "speakers": ["Speaker A"],
+            },
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(out_of_range)
+        mock_client_factory.return_value = mock_client
+
+        with pytest.raises(SegmentationError, match="out of range"):
+            segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
+
+    @patch("app.segmentation._create_client")
+    def test_segment_boundary_overlap_raises(self, mock_client_factory):
+        overlapping = json.dumps([
+            {
+                "start_line": 1,
+                "end_line": 4,
+                "label": "First segment",
+                "speakers": ["Speaker A"],
+            },
+            {
+                "start_line": 3,
+                "end_line": 6,
+                "label": "Overlapping segment",
+                "speakers": ["Speaker B"],
+            },
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(overlapping)
+        mock_client_factory.return_value = mock_client
+
+        with pytest.raises(SegmentationError, match="overlaps previous segment"):
+            segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
+
+    @patch("app.segmentation._create_client")
+    def test_segment_text_sliced_from_original(self, mock_client_factory):
+        boundaries = json.dumps([
+            {
+                "start_line": 1,
+                "end_line": 2,
+                "label": "Backend planning",
+                "speakers": ["Speaker A"],
+            },
+            {
+                "start_line": 3,
+                "end_line": 6,
+                "label": "Database and frontend",
+                "speakers": ["Speaker A", "Speaker B"],
+            },
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(boundaries)
+        mock_client_factory.return_value = mock_client
+
+        result = segment_transcript(SAMPLE_TRANSCRIPT, SPEAKER_MAP)
+
+        assert result[0].text == (
+            "Speaker A: Let's talk about the project\n"
+            "Speaker A: I think we should start with the backend"
+        )
+        assert result[1].text == (
+            "Speaker B: I agree, the API needs work\n"
+            "Speaker B: We should also consider the database\n"
+            "Speaker A: Good point about the database\n"
+            "Speaker B: Let's plan the frontend next"
+        )
 
 
 class TestGenerateEventLabel:

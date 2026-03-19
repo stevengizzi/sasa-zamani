@@ -12,24 +12,33 @@ MODEL = "claude-sonnet-4-20250514"
 SEGMENTATION_PROMPT = """\
 You are a transcript analyst. Segment the following transcript into thematic units.
 
+The transcript below is provided with numbered lines (L001, L002, etc.).
+
 Rules:
 - Identify where the conversation shifts topic. Group consecutive speaker turns \
 that share a theme into a single segment.
-- For each segment, return the full verbatim text, a 3-5 word label, and the list \
-of speakers who contributed.
+- For each segment, return the start and end line numbers (inclusive, 1-indexed), \
+a 3-5 word label, and the list of speakers who contributed.
+- Segments must cover consecutive line ranges — no reordering.
+- Every content line should belong to exactly one segment (no gaps in coverage \
+of non-empty lines, no overlaps).
+- Segments must be in order: each segment's start_line > previous segment's end_line.
+- Labels should be 3-5 words.
+- List all speakers who contributed to the segment.
 - Return ONLY a JSON array matching this schema exactly:
 
 ```json
 [
   {{
-    "text": "Full verbatim segment text",
+    "start_line": 1,
+    "end_line": 14,
     "label": "3-5 word summary",
     "speakers": ["Speaker A", "Speaker B"]
   }}
 ]
 ```
 
-Every segment must have all three fields. Do not wrap in markdown fences or add commentary.
+Every segment must have all four fields. Do not wrap in markdown fences or add commentary.
 
 Transcript:
 {transcript}"""
@@ -88,13 +97,15 @@ def segment_transcript(
     if not isinstance(text, str):
         raise TypeError(f"text must be a str, got {type(text).__name__}")
 
-    prompt = SEGMENTATION_PROMPT.format(transcript=text)
+    lines = text.split("\n")
+    numbered = "\n".join(f"L{i + 1:03d}: {line}" for i, line in enumerate(lines))
+    prompt = SEGMENTATION_PROMPT.format(transcript=numbered)
 
     try:
         client = _create_client()
         response = client.messages.create(
             model=MODEL,
-            max_tokens=32000,
+            max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.content[0].text.strip()
@@ -111,18 +122,48 @@ def segment_transcript(
             f"Expected JSON array, got {type(segments_data).__name__}"
         )
 
+    prev_end = 0
     segments: list[Segment] = []
     for i, item in enumerate(segments_data):
         if not isinstance(item, dict):
             raise SegmentationError(f"Segment {i} is not an object")
-        missing = [f for f in ("text", "label", "speakers") if f not in item]
+        missing = [
+            f
+            for f in ("start_line", "end_line", "label", "speakers")
+            if f not in item
+        ]
         if missing:
             raise SegmentationError(
                 f"Segment {i} missing fields: {', '.join(missing)}"
             )
+
+        start = item["start_line"]
+        end = item["end_line"]
+
+        if start > end:
+            raise SegmentationError(
+                f"Segment {i} has start_line {start} > end_line {end}"
+            )
+        if start < 1 or end > len(lines):
+            raise SegmentationError(
+                f"Segment {i} out of range: lines {start}-{end} "
+                f"(transcript has {len(lines)} lines)"
+            )
+        if start <= prev_end:
+            raise SegmentationError(
+                f"Segment {i} overlaps previous segment "
+                f"(start_line {start} <= previous end_line {prev_end})"
+            )
+
+        segment_text = "\n".join(lines[start - 1 : end])
+        prev_end = end
+
+        if not segment_text.strip():
+            continue
+
         participants = _map_speakers(item["speakers"], speaker_map, default_participant)
         segments.append(
-            Segment(text=item["text"], label=item["label"], participants=participants)
+            Segment(text=segment_text, label=item["label"], participants=participants)
         )
 
     return segments
