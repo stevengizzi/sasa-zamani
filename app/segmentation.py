@@ -56,7 +56,7 @@ class Segment:
 
 
 def _create_client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
+    return anthropic.Anthropic(api_key=get_settings().anthropic_api_key, timeout=120.0)
 
 
 def _map_speakers(
@@ -94,7 +94,7 @@ def segment_transcript(
         client = _create_client()
         response = client.messages.create(
             model=MODEL,
-            max_tokens=4096,
+            max_tokens=32000,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.content[0].text.strip()

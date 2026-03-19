@@ -138,6 +138,17 @@ class TestSegmentTranscript:
         with pytest.raises(SegmentationError, match="Malformed JSON"):
             segment_transcript("fake transcript", SPEAKER_MAP)
 
+    @patch("app.segmentation._create_client")
+    def test_segment_transcript_max_tokens(self, mock_client_factory):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_claude_response(THREE_SEGMENTS)
+        mock_client_factory.return_value = mock_client
+
+        segment_transcript("fake transcript", SPEAKER_MAP)
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["max_tokens"] == 32000
+
 
 class TestGenerateEventLabel:
     """Tests for generate_event_label()."""
