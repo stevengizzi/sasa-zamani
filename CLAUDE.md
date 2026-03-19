@@ -5,14 +5,14 @@
 
 ## Active Sprint
 
-**No active sprint.** Sprint 2 complete. Sprint 3 ready to plan.
+**No active sprint.** Sprint 3 complete. Sprint 4 ready to plan.
 
 ## Current State
 
-- **Sprints completed:** 2 (Backend Foundation + Data Pipeline; Frontend Migration)
+- **Sprints completed:** 3 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep)
 - **Active sprint:** None
-- **Next sprint:** 3 (Integration Testing + Edge City Demo Prep)
-- **Tests:** 123 (118–119 pass, 2–3 skip)
+- **Next sprint:** 4 (Design Brief Alignment)
+- **Tests:** 147 (144 pass, 3 skip)
 - **Infrastructure:** Railway: web-production-0aa47.up.railway.app | Supabase: kngzaasfcbjccivuqbkt.supabase.co | Telegram bot: webhook active at /telegram
 - **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
 
@@ -60,13 +60,16 @@ sasa-zamani/
 │   ├── test_telegram.py     # Telegram webhook tests
 │   ├── test_granola.py      # Granola parser tests
 │   ├── test_myth.py         # Myth generation tests
+│   ├── test_seed_transcript.py # Seed transcript pipeline tests
 │   └── test_integration.py  # End-to-end integration tests
 ├── scripts/
 │   ├── __init__.py
 │   ├── seed_clusters.py     # Initialize seed cluster centroids
+│   ├── seed_transcript.py   # Batch-seed events from Granola transcripts
 │   ├── backfill_xs.py       # Backfill xs values for existing events
 │   ├── centroid_matrix.py   # Compute centroid similarity matrix
-│   └── cluster_sanity.py    # Validate cluster assignment quality
+│   ├── cluster_sanity.py    # Validate cluster assignment quality
+│   └── test_myth_quality.py # Manual myth quality evaluation (not collected by pytest)
 ├── requirements.txt
 ├── pyproject.toml           # pytest config, marker registration
 ├── Procfile                 # Railway: web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -112,6 +115,8 @@ Three tables: `events` (id, label, note, participant, source, embedding vector(1
 - DEC-012: Raw JSON webhook over python-telegram-bot
 - DEC-013: In-memory dedup for Telegram updates
 - DEC-014: Lifted do-not-modify constraint on telegram.py/granola.py for pipeline wiring
+- DEC-015: Atomic increment via Postgres RPC (resolves DEF-010)
+- DEC-016: Lifted do-not-modify on app/models.py for event_date field
 
 ## Language Constraints
 
@@ -123,4 +128,4 @@ Jessie: #7F77DD · Emma: #D85A30 · Steven: #1D9E75 · Shared: #BA7517
 
 ## Deferred Items
 
-Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 1 carry-forwards: DEF-010 (non-atomic increment_event_count), DEF-011 (duplicated SEED_ARCHETYPES), DEF-012 (non-atomic insert+increment), DEF-013 (unbounded dedup set), DEF-014 (cluster_id as cluster_name). Sprint 2 carry-forwards: DEF-016 (seed_clusters.py does not populate glyph_id).
+Google Calendar integration, voice memo + Whisper, dynamic clustering (HDBSCAN), moon nodes, new event arrival animation, mobile layout, truth layer (Layer 3), full myth layer (Layer 4), zamani view. Sprint 3 carry-forwards: DEF-017 (myth post-validation), DEF-018 (transcript dedup), DEF-019 (LLM-generated event labels instead of raw text[:80]).

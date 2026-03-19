@@ -321,3 +321,49 @@ Frontend migration must be complete and verified before modifying input pipeline
 
 **Supersedes:** N/A
 **Cross-References:** DEC-006 (input modalities), DEF-010 (non-atomic increment)
+
+---
+
+**DEC-015:** Atomic increment via Postgres RPC
+**Date:** 2026-03-19
+**Sprint:** 3
+**Session:** S1a
+
+**Decision:**
+Replace the read-then-write pattern in `increment_event_count` with `client.rpc("increment_event_count", {"cid": cluster_id})`, delegating to a Postgres function that atomically increments the cluster's `event_count` by 1.
+
+**Alternatives Rejected:**
+1. Raw SQL via Supabase management API: More complex, harder to test, and introduces a different access pattern than the rest of the codebase.
+2. Read-then-write with retry: Still has a race window between read and update. Adds retry complexity without eliminating the fundamental problem.
+
+**Rationale:**
+DEF-010 identified a race condition in the original `increment_event_count` implementation (read current count, add 1, write back). Supabase PostgREST does not support SQL expressions in update payloads, so an atomic increment cannot be expressed through the standard client API. A Postgres function is the idiomatic solution — it executes atomically within the database, eliminating the race window entirely.
+
+**Constraints:**
+Requires one-time Postgres function creation in the Supabase SQL editor. Function created 2026-03-19. Cannot be managed through supabase-py or version-controlled DDL (existing limitation per architecture.md).
+
+**Supersedes:** N/A (resolves DEF-010)
+**Cross-References:** DEC-002 (Supabase), DEF-010 (race condition), DEF-012 (non-atomic insert+increment)
+
+---
+
+**DEC-016:** Lift do-not-modify constraint on app/models.py for event_date
+**Date:** 2026-03-19
+**Sprint:** 3
+**Session:** S4 (post-review)
+
+**Decision:**
+Lift the do-not-modify constraint on `app/models.py` for a one-line addition: `event_date: datetime | None = None` to `EventResponse`. The constraint remains in effect for all other fields and models.
+
+**Alternatives Rejected:**
+1. Defer to post-sprint: The strata view would be broken for the Edge City demo — events would lack `event_date` in the API response, making the time axis meaningless.
+2. Bypass the model with a custom endpoint: Over-engineered for a single field addition. Introduces an inconsistent API surface.
+
+**Rationale:**
+The timestamp fix (between S2 and S3) added `event_date` to `insert_event()` and the events table, but `EventResponse` in `app/models.py` did not include the field. The strata view needs `event_date` from the API to render events on the correct time axis. Without this change, all seeded events would pile at the same timestamp. The modification is minimal (one line) and does not alter the structure of existing models.
+
+**Constraints:**
+Constraint lifted for this specific addition only. `app/models.py` remains on the do-not-modify list for all other changes.
+
+**Supersedes:** N/A
+**Cross-References:** DEC-014 (precedent for lifting do-not-modify constraints), DEC-005 (frontend requirements)

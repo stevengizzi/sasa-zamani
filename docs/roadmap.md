@@ -61,15 +61,18 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 - Archetype panel lacks clickable event items for reverse chaining (archetype→event navigation)
 - DEF-016: seed_clusters.py does not populate glyph_id column
 
-### Sprint 3 — Integration Testing + Edge City Demo Prep
-**Scope:** End-to-end testing with real usage. All three participants using the Telegram bot for 2-3 days. Upload at least one Granola transcript. Tune JOIN_SIM threshold. Prompt engineering for myth quality. Bug fixes. Performance tuning.
+### Sprint 3 — Integration Testing + Edge City Demo Prep ✓
+**Status:** Complete (7 sessions, tests 125 → 147)
 
-**Deliverables:**
-- System tested with real data from all three participants
-- JOIN_SIM threshold tuned
-- Myth prompt refined (tested against design brief)
-- Edge City demo rehearsed
-- Known bugs documented and triaged
+**Delivered:**
+- ~393 events seeded from 2 Granola transcripts across 6 clusters
+- Batch seeding tool (`scripts/seed_transcript.py`) with speaker remapping, min-length filtering, dry-run, `--date` arg
+- 6 deferred items resolved: DEF-010 (atomic RPC), DEF-011, DEF-012, DEF-013, DEF-014, DEF-016
+- Myth prompt refined for ancestral register quality (FF-005)
+- Frontend demo polish: strata view time axis, loading/empty states (FF-006)
+- `event_date` column added to events pipeline and API response (DEC-015, DEC-016)
+- XS_CENTERS overlap fixed (Gate/Silence)
+- New files: `scripts/seed_transcript.py`, `tests/test_seed_transcript.py`, `scripts/test_myth_quality.py`
 
 ### Sprint 4 — Design Brief Alignment (Phase 2)
 **Scope:** Visual polish. Implement the Design Brief's aesthetic: Cormorant Garamond / DM Mono typography, river-at-night color palette (#0e0c09 void, #c49a3a gold, #8a8aaa violet-slate), grain overlay, blur and atmosphere, the layering rules. Scroll/zoom/pan on both views.
@@ -93,13 +96,10 @@ Privacy controls (private flag: AI-readable, participant-hidden). Participant ma
 | DEF-007 | Visual myth layer (image generation) | Phase 3+ | Held per Project Bible §14 |
 | DEF-008 | Name decision (Sasa/Zamani/compound/other) | Phase 2 | Revisit after prototype validated |
 | DEF-009 | Onboarding flow for new users | Phase 4 | Three known users for MVP |
-| DEF-010 | increment_event_count not atomic (read+update race) | Sprint 2+ | Fine for v1 single-process, needs Postgres function at scale |
-| DEF-011 | SEED_ARCHETYPES duplicated app/ vs scripts/ | Sprint 2+ | Intentional module isolation, consolidate when stable |
-| DEF-012 | Non-atomic insert_event + increment_event_count | Sprint 2+ | Misleading return on partial failure |
-| DEF-013 | In-memory Telegram dedup set grows unbounded | Sprint 2+ | Needs LRU or periodic clear |
-| DEF-014 | process_granola_upload returns cluster_id as cluster_name | Sprint 2+ | Minor spec deviation |
 | DEF-015 | Privacy flag (AI-readable, participant-hidden) | Phase 4 | Trust-based for three collaborators |
-| DEF-016 | seed_clusters.py does not populate glyph_id column | Sprint 3+ | Manual DB fix applied; script fix needed for future re-seeds |
+| DEF-017 | Myth post-validation | Sprint 4+ | Verify generated myths pass PROHIBITED_WORDS and register checks |
+| DEF-018 | Transcript dedup | Sprint 4+ | Prevent re-seeding same transcript |
+| DEF-019 | LLM-generated event labels | Sprint 4+ | Currently raw text[:80]; Claude summary would improve readability |
 
 ## Fast-Follow Feature Ideas
 
@@ -117,5 +117,8 @@ When a new Telegram event clusters with an old constellation (high similarity + 
 ### FF-004: Seed Pool from Existing Life Data
 Bulk upload of journals, message exports, old calendars to pre-populate the pool. Eliminates the empty-pool first-visit problem. The first encounter — seeing constellations you didn't know existed in your own life — demonstrates the tool's value before the daily input habit forms. For MVP demo: pre-seed with the Mar 17 Granola transcript so the map isn't empty on first visit. Uses the same embedding/clustering pipeline.
 
-### FF-005: Myth as Shareable Artifact
+### FF-005: LLM-Generated Event Labels (DEF-019)
+Event labels currently use raw `text[:80]` — the first 80 characters of the message. Replace with a Claude-generated 3-5 word summary that captures the event's essence. One API call per event at ingestion time. Low cost, high readability improvement for both the strata view and detail panels. Identified during Sprint 3 S2 live run.
+
+### FF-006: Myth as Shareable Artifact
 A share button on the archetype panel generates a designed standalone card — myth text in Cormorant Garamond, archetype glyph, constellation color signature, the line "Here's a true story that never happened." Something that travels beyond the tool. The Deutsch "reach" test made operational. Server-side renderer (HTML-to-image or template). The moment the tool produces something that is for anyone, not just the user.

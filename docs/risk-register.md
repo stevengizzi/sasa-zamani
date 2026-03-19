@@ -20,11 +20,15 @@ OpenAI text-embedding-3-small may not produce clusters that feel "surprising and
 - All scores above the default 0.3 CLUSTER_JOIN_THRESHOLD
 - Default threshold of 0.3 is well-calibrated against the centroid matrix
 
+**Sprint 3 Observation:**
+- With ~393 real events seeded from 2 Granola transcripts, most events are assigned to clusters with cosine similarity below the 0.3 threshold. This is because seed cluster centroids were computed from tags, not from the embedding model. The embeddings themselves are high quality, but the centroids are misaligned with the embedding space. Centroid recomputation from actual member event embeddings is the primary mitigation path and would likely resolve the low-similarity assignments.
+
 **Mitigation:**
 1. ~~Test embedding quality early (Sprint 1) with real messages from the team before building the full pipeline.~~ Done.
 2. ~~JOIN_SIM threshold tuning session with real data.~~ CLUSTER_JOIN_THRESHOLD=0.3, validated.
-3. Fallback: Cohere embed-multilingual-v3 if OpenAI produces poor results.
-4. Longer-term fallback: local sentence-transformers with fine-tuning on the team's actual data.
+3. Centroid recomputation from member event embeddings (deferred — next priority for clustering quality).
+4. Fallback: Cohere embed-multilingual-v3 if OpenAI produces poor results.
+5. Longer-term fallback: local sentence-transformers with fine-tuning on the team's actual data.
 
 **Owner:** Steven
 **Related:** DEC-003, DEC-011
@@ -44,7 +48,12 @@ Claude's mythic sentence output may default to therapy-speak, generic wisdom, or
 - PROHIBITED_WORDS constant enforces banned word list: journey, growth, explore, reflect, transformation, powerful, detect, discover, reveal, activate, unlock
 - Prompt instructs Claude to speak in ancestral register — from the past looking forward
 - Caching with delta-based regeneration (3+ new events triggers refresh)
-- Risk partially mitigated at the implementation level — needs production testing with real cluster data to validate output quality
+
+**Sprint 3 Refinement:**
+- Myth prompt tuned in S3 session for improved ancestral register quality, reduced therapy-speak
+- Tested against real cluster data (~393 seeded events across 6 clusters)
+- DEF-017 (myth post-validation) identified as carry-forward — automated PROHIBITED_WORDS checking of generated output not yet implemented
+- Full prompt review with Emma still needed for tonal sign-off
 
 **Mitigation:**
 1. ~~Prompt engineering sprint with Emma (who owns the tonal register) before launch.~~ Partially addressed: PROHIBITED_WORDS list implemented. Full prompt review with Emma still needed.

@@ -43,7 +43,7 @@ The architecture is a classic three-tier web application: a canvas-based fronten
 │              SUPABASE (Postgres + pgvector)              │
 │                                                         │
 │  events: id, label, note, participant, embedding,       │
-│          cluster_id, xs, created_at, source             │
+│          cluster_id, xs, created_at, event_date, source             │
 │                                                         │
 │  clusters: id, name, myth_text, centroid,                │
 │            event_count, last_updated, is_seed            │
@@ -87,10 +87,17 @@ Key backend files (v1):
 - `app/models.py` — Pydantic models for request/response validation (includes MythRequest/MythResponse)
 - `app/db.py` — Supabase client, queries (includes get_cluster_by_id, get_cluster_events_labels, get_latest_myth, insert_myth, update_cluster_myth)
 
+### Batch Seeding — seed_transcript.py
+CLI tool for batch-seeding events from Granola transcript files. Features: speaker label remapping (e.g., `--map "Speaker A=emma"`), minimum segment length filtering, `--dry-run` mode for preview, and `--date` argument to set `event_date` explicitly for all seeded events. Uses the same embedding/clustering pipeline as the live ingestion paths. Located at `scripts/seed_transcript.py`.
+
 ### Database — Supabase
 Managed Postgres with pgvector extension. Stores events with their embedding vectors, cluster definitions with centroid embeddings, and cached myth text. Cosine similarity queries for cluster assignment run in SQL.
 
 **Operational note:** `ensure_schema()` at startup verifies that required tables exist (probes) but does not create them. supabase-py cannot execute DDL. Schema creation is a one-time operation via `scripts/init_supabase.sql` in the Supabase SQL editor. The canonical column name in the clusters table is `centroid` (not `centroid_embedding`).
+
+**Postgres RPC function:** `increment_event_count(cid UUID)` atomically increments a cluster's `event_count` by 1. Created manually in the Supabase SQL editor (DEC-015). Called via `client.rpc("increment_event_count", {"cid": cluster_id})` from both the Telegram and Granola pipelines. Replaces the prior read-then-write pattern (DEF-010).
+
+**`event_date` column:** The `events` table includes an `event_date TIMESTAMPTZ` column representing when the event actually occurred (as opposed to `created_at`, which is when it was logged). Batch seeding via `seed_transcript.py` sets `event_date` explicitly from the `--date` CLI argument. The live pipeline (Telegram/Granola) does not set `event_date`; the frontend falls back to `created_at` when `event_date` is null. `EventResponse` in `app/models.py` exposes this field as `event_date: datetime | None = None` (DEC-016).
 
 ## Tech Stack
 
@@ -242,13 +249,16 @@ sasa-zamani/
 │   ├── test_telegram.py      # Telegram webhook tests
 │   ├── test_granola.py       # Granola parser tests
 │   ├── test_myth.py          # Myth generation tests
+│   ├── test_seed_transcript.py # Seed transcript pipeline tests
 │   └── test_integration.py   # End-to-end integration tests
 ├── scripts/
 │   ├── __init__.py
 │   ├── seed_clusters.py      # Initialize seed cluster centroids
+│   ├── seed_transcript.py    # Batch-seed events from Granola transcripts
 │   ├── backfill_xs.py        # Backfill xs values for existing events
 │   ├── centroid_matrix.py    # Compute centroid similarity matrix
-│   └── cluster_sanity.py     # Validate cluster assignment quality
+│   ├── cluster_sanity.py     # Validate cluster assignment quality
+│   └── test_myth_quality.py  # Manual myth quality evaluation (not collected by pytest)
 ├── requirements.txt
 ├── pyproject.toml            # pytest config, marker registration
 ├── Procfile                  # Railway deployment

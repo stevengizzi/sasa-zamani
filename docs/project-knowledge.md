@@ -17,13 +17,14 @@ The core visualization is the Sasa Map: a canvas-based interface with two views 
 
 ## Current State
 
-**Tests:** 123 (118–119 pass, 2–3 skip)
-**Sprints completed:** 2 (Backend Foundation + Data Pipeline; Frontend Migration)
+**Tests:** 147 (144 pass, 3 skip)
+**Sprints completed:** 3 (Backend Foundation + Data Pipeline; Frontend Migration; Integration Testing + Edge City Demo Prep)
 **Active sprint:** None
 **Production URL:** https://web-production-0aa47.up.railway.app
 **Database:** https://kngzaasfcbjccivuqbkt.supabase.co
 **GitHub:** https://github.com/stevengizzi/sasa-zamani.git
-**Next sprint:** 3 (Integration Testing + Edge City Demo Prep)
+**Seeded data:** ~393 events across 6 clusters from 2 Granola transcripts
+**Next sprint:** 4 (Design Brief Alignment)
 
 ## Architecture
 
@@ -55,6 +56,8 @@ Python 3.11.8 (local) / 3.13.12 (Railway) · FastAPI · Supabase (Postgres 15 + 
 | DEC-012 | Raw JSON webhook over python-telegram-bot | Active |
 | DEC-013 | In-memory dedup for Telegram updates | Active |
 | DEC-014 | Lift do-not-modify constraint on telegram.py/granola.py | Active |
+| DEC-015 | Atomic increment via Postgres RPC | Active |
+| DEC-016 | Lift do-not-modify on app/models.py for event_date | Active |
 
 See docs/decision-log.md for full rationale, alternatives rejected, and cross-references.
 

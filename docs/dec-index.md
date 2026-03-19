@@ -18,3 +18,5 @@
 | DEC-012 | 2026-03-18 | 1 | Raw JSON webhook over python-telegram-bot | Active |
 | DEC-013 | 2026-03-18 | 1 | In-memory dedup for Telegram updates | Active |
 | DEC-014 | 2026-03-19 | 2 | Lift do-not-modify constraint on telegram.py/granola.py | Active |
+| DEC-015 | 2026-03-19 | 3 | Atomic increment via Postgres RPC (resolves DEF-010) | Active |
+| DEC-016 | 2026-03-19 | 3 | Lift do-not-modify on app/models.py for event_date | Active |
