@@ -16,6 +16,7 @@ class EventResponse(BaseModel):
     source: str
     xs: float | None = None
     day: int | None = None
+    event_date: datetime | None = None
 
 
 class ClusterResponse(BaseModel):
